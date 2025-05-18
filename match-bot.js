@@ -187,7 +187,7 @@ async function createPost(match) {
     `;
     
     // Important: Use API Key authentication with the correct URL
-    const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts?key=${API_KEY}`;
+    const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts`;
     
     const response = await axios.post(url, {
       kind: 'blogger#post',
