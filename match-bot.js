@@ -140,7 +140,7 @@ async function createPost(match) {
       </div>
     `;
     
-    const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts?key=${API_KEY}`;
+    const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/`;
     
     const response = await axios.post(url, {
       kind: 'blogger#post',
