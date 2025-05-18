@@ -3,7 +3,7 @@ const cheerio = require('cheerio');
 
 const CONFIG = {
   blogId: process.env.BLOG_ID,
-  apiKey: process.env.BLOGGER_API_KEY,
+  apiKey: process.env.API_KEY,
   
   matchSources: {
     yesterday: 'https://www.kooraliive.com/matches-yesterday/',
