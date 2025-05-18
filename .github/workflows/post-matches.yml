@@ -2,7 +2,7 @@ name: Post Matches to Blogger
 
 on:
   schedule:
-    - cron: '0 1 * * *'
+    - cron: '0 1 * * *'  # Runs every day at 1:00 AM UTC
   workflow_dispatch:
 
 jobs:
@@ -20,22 +20,26 @@ jobs:
       - name: Install dependencies
         run: npm install axios cheerio
 
+      - name: Install jq
+        run: sudo apt-get install jq
+
       - name: Generate Blogger Access Token
         id: generate_token
         run: |
-          echo "Fetching new ACCESS_TOKEN..."
-          ACCESS_TOKEN=$(curl -s -X POST https://oauth2.googleapis.com/token \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "client_id=${{ secrets.CLIENT_ID }}" \
-            -d "client_secret=${{ secrets.CLIENT_SECRET }}" \
-            -d "refresh_token=${{ secrets.REFRESH_TOKEN }}" \
-            -d "grant_type=refresh_token" | jq -r '.access_token')
+          RESPONSE=$(curl -s -X POST https://oauth2.googleapis.com/token \
+            -d client_id="${{ secrets.CLIENT_ID }}" \
+            -d client_secret="${{ secrets.CLIENT_SECRET }}" \
+            -d refresh_token="${{ secrets.REFRESH_TOKEN }}" \
+            -d grant_type=refresh_token)
 
-          echo "ACCESS_TOKEN=${ACCESS_TOKEN}" >> $GITHUB_ENV
-        env:
-          CLIENT_ID: ${{ secrets.CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-          REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
+          echo "OAuth response: $RESPONSE"
+
+          ACCESS_TOKEN=$(echo "$RESPONSE" | jq -r '.access_token')
+          if [[ "$ACCESS_TOKEN" == "null" || -z "$ACCESS_TOKEN" ]]; then
+            echo "❌ Failed to generate access token."
+            exit 1
+          fi
+          echo "ACCESS_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
 
       - name: Run match posting script
         run: node match-bot.js
