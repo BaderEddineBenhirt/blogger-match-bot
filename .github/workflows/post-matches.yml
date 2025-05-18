@@ -24,3 +24,4 @@ jobs:
         env:
           BLOG_ID: ${{ secrets.BLOG_ID }}
           BLOGGER_API_KEY: ${{ secrets.BLOGGER_API_KEY }}
+          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
