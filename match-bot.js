@@ -2,42 +2,57 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const { google } = require('googleapis');
 
+const BLOG_ID = process.env.BLOG_ID;
+const CLIENT_ID = process.env.CLIENT_ID;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
+const REFRESH_TOKEN = process.env.REFRESH_TOKEN;
+
+console.log('======================= ENV VARS =======================');
+console.log('BLOG_ID exists:', !!BLOG_ID);
+console.log('CLIENT_ID exists:', !!CLIENT_ID);
+console.log('CLIENT_SECRET exists:', !!CLIENT_SECRET);
+console.log('REFRESH_TOKEN exists:', !!REFRESH_TOKEN);
+console.log('====================================================');
+
 const MATCH_SOURCES = {
   yesterday: 'https://www.kooraliive.com/matches-yesterday/',
   today: 'https://www.kooraliive.com/matches-today/',
   tomorrow: 'https://www.kooraliive.com/matches-tomorrow/'
 };
-
 const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
 const DEFAULT_STREAM_URL = 'https://live4all.net/frame.php?ch=bein3';
 const REQUEST_DELAY = 2000;
 const MAX_RETRIES = 3;
 const BACKOFF_MULTIPLIER = 1.5;
 
-function debugEnvironmentVariables() {
-  console.log('Environment variables:');
-  console.log('BLOG_ID:', process.env.BLOG_ID ? 'Set (value hidden)' : 'Not set');
-  console.log('CLIENT_ID:', process.env.CLIENT_ID ? 'Set (value hidden)' : 'Not set');
-  console.log('CLIENT_SECRET:', process.env.CLIENT_SECRET ? 'Set (value hidden)' : 'Not set');
-  console.log('REFRESH_TOKEN:', process.env.REFRESH_TOKEN ? 'Set (value hidden)' : 'Not set');
-}
-
 async function getOAuth2Client() {
-  debugEnvironmentVariables();
-  
   try {
-    if (!process.env.CLIENT_ID || !process.env.CLIENT_SECRET || !process.env.REFRESH_TOKEN) {
-      throw new Error('Missing required OAuth credentials. Please set CLIENT_ID, CLIENT_SECRET, and REFRESH_TOKEN environment variables.');
+    if (!CLIENT_ID) {
+      console.error('CLIENT_ID is missing or empty!');
+      throw new Error('CLIENT_ID environment variable not set');
+    }
+    if (!CLIENT_SECRET) {
+      console.error('CLIENT_SECRET is missing or empty!');
+      throw new Error('CLIENT_SECRET environment variable not set');
+    }
+    if (!REFRESH_TOKEN) {
+      console.error('REFRESH_TOKEN is missing or empty!');
+      throw new Error('REFRESH_TOKEN environment variable not set');
     }
 
+    console.log('Creating OAuth2 client with:');
+    console.log('- CLIENT_ID: [exists]');
+    console.log('- CLIENT_SECRET: [exists]');
+    console.log('- REFRESH_TOKEN: [exists]');
+
     const oauth2Client = new google.auth.OAuth2(
-      process.env.CLIENT_ID,
-      process.env.CLIENT_SECRET,
-      'https://developers.google.com/oauthplayground' 
+      CLIENT_ID,
+      CLIENT_SECRET,
+      'https://developers.google.com/oauthplayground'
     );
     
     oauth2Client.setCredentials({
-      refresh_token: process.env.REFRESH_TOKEN
+      refresh_token: REFRESH_TOKEN
     });
     
     const tokenInfo = await oauth2Client.getAccessToken();
@@ -75,7 +90,7 @@ async function fetchMatches(day = 'today') {
     console.log(`Fetching matches for ${day} from ${url}`);
     
     const response = await axios.get(CORS_PROXY + encodeURIComponent(url), {
-      timeout: 30000, 
+      timeout: 30000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       }
@@ -145,8 +160,13 @@ async function fetchMatches(day = 'today') {
 
 async function checkPostExists(title, bloggerClient) {
   try {
+    if (!BLOG_ID) {
+      console.error('BLOG_ID is missing or empty!');
+      throw new Error('BLOG_ID environment variable not set');
+    }
+
     const response = await bloggerClient.posts.search({
-      blogId: process.env.BLOG_ID,
+      blogId: BLOG_ID,
       q: title
     });
     
@@ -197,6 +217,11 @@ async function createPostWithRetry(match, bloggerClient, maxRetries = MAX_RETRIE
 
 async function createPost(match, bloggerClient) {
   try {
+    if (!BLOG_ID) {
+      console.error('BLOG_ID is missing or empty!');
+      throw new Error('BLOG_ID environment variable not set');
+    }
+
     const title = `${match.homeTeam} vs ${match.awayTeam} - ${match.league}`;
     
     const exists = await checkPostExists(title, bloggerClient);
@@ -277,11 +302,13 @@ async function createPost(match, bloggerClient) {
     </p>
     `;
     
+    console.log(`Creating post: ${title}`);
+    
     const response = await bloggerClient.posts.insert({
-      blogId: process.env.BLOG_ID,
+      blogId: BLOG_ID,
       requestBody: {
         kind: 'blogger#post',
-        blog: { id: process.env.BLOG_ID },
+        blog: { id: BLOG_ID },
         title: title,
         content: content,
         url: `https://badertalks.blogspot.com/${new Date().getFullYear()}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}/${slug}.html`
@@ -300,14 +327,21 @@ async function createPost(match, bloggerClient) {
 }
 
 async function createMatchPosts() {
+  console.log('Starting to create match posts...');
+  
+  if (!BLOG_ID || !CLIENT_ID || !CLIENT_SECRET || !REFRESH_TOKEN) {
+    console.error('Missing required environment variables:', {
+      BLOG_ID: !!BLOG_ID,
+      CLIENT_ID: !!CLIENT_ID,
+      CLIENT_SECRET: !!CLIENT_SECRET,
+      REFRESH_TOKEN: !!REFRESH_TOKEN
+    });
+    
+    console.error('Please set BLOG_ID, CLIENT_ID, CLIENT_SECRET, and REFRESH_TOKEN.');
+    return 0;
+  }
+  
   try {
-    console.log('Starting to create match posts...');
-    
-    if (!process.env.BLOG_ID || !process.env.CLIENT_ID || !process.env.CLIENT_SECRET || !process.env.REFRESH_TOKEN) {
-      console.error('Missing required environment variables. Please set BLOG_ID, CLIENT_ID, CLIENT_SECRET, and REFRESH_TOKEN.');
-      return 0;
-    }
-    
     const bloggerClient = await getBloggerClient();
     
     console.log('Fetching today\'s matches...');
