@@ -1,39 +1,29 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-// Configuration
 const CONFIG = {
-  // Blogger configuration
   blogId: process.env.BLOG_ID,
-  apiKey: process.env.API_KEY,
+  apiKey: process.env.BLOGGER_API_KEY,
   
-  // Match source configuration
   matchSources: {
     yesterday: 'https://www.kooraliive.com/matches-yesterday/',
     today: 'https://www.kooraliive.com/matches-today/',
     tomorrow: 'https://www.kooraliive.com/matches-tomorrow/'
   },
   
-  // CORS proxy for web scraping
   corsProxy: 'https://api.allorigins.win/raw?url=',
   
-  // Default match URL for live stream iframe
   defaultStreamUrl: 'https://live4all.net/frame.php?ch=bein3',
   
-  // Delay between API requests (to avoid rate limits)
   requestDelay: 2000,
   
-  // Maximum retries for failed requests
   maxRetries: 3,
   
-  // Backoff multiplier for retries
   backoffMultiplier: 1.5
 };
 
-// Fetch matches from kooraliive.com
 async function fetchMatches(day = 'today') {
   try {
-    // Validate day parameter
     if (!CONFIG.matchSources[day]) {
       console.error(`Invalid day parameter: ${day}`);
       return [];
@@ -42,9 +32,8 @@ async function fetchMatches(day = 'today') {
     const url = CONFIG.matchSources[day];
     console.log(`Fetching matches for ${day} from ${url}`);
     
-    // Use CORS proxy to avoid CORS issues
     const response = await axios.get(CONFIG.corsProxy + encodeURIComponent(url), {
-      timeout: 30000, // 30 second timeout
+      timeout: 30000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       }
@@ -59,19 +48,16 @@ async function fetchMatches(day = 'today') {
     const $ = cheerio.load(html);
     const matches = [];
     
-    // Parse each match element
     $('.AY_Match').each((index, element) => {
       try {
         const homeTeam = $(element).find('.TM1 .TM_Name').text().trim();
         const awayTeam = $(element).find('.TM2 .TM_Name').text().trim();
         
-        // Skip if essential data is missing
         if (!homeTeam || !awayTeam) {
           console.log(`Skipping match #${index} - missing team data`);
           return;
         }
         
-        // Get team logos with fallback for lazy-loaded images
         let homeTeamLogo = $(element).find('.TM1 .TM_Logo img').attr('src');
         if (homeTeamLogo && homeTeamLogo.includes('data:image/gif;base64')) {
           homeTeamLogo = $(element).find('.TM1 .TM_Logo img').attr('data-src');
@@ -82,15 +68,12 @@ async function fetchMatches(day = 'today') {
           awayTeamLogo = $(element).find('.TM2 .TM_Logo img').attr('data-src');
         }
         
-        // Get match details
         const time = $(element).find('.MT_Time').text().trim();
         const league = $(element).find('.MT_Info li:last-child span').text().trim();
         const broadcaster = $(element).find('.MT_Info li:first-child span').text().trim();
         
-        // Get match URL for the live stream
         const matchUrl = $(element).find('a').attr('href') || '';
         
-        // Create match object
         const match = {
           id: `${day}-${index}`,
           homeTeam,
@@ -118,7 +101,6 @@ async function fetchMatches(day = 'today') {
   }
 }
 
-// Check if a post with similar title already exists
 async function checkPostExists(title) {
   try {
     const searchUrl = `https://www.googleapis.com/blogger/v3/blogs/${CONFIG.blogId}/posts/search?q=${encodeURIComponent(title)}&key=${CONFIG.apiKey}`;
@@ -131,17 +113,15 @@ async function checkPostExists(title) {
     
     return false;
   } catch (error) {
-    // Handle "not found" errors gracefully (these are expected when post doesn't exist)
     if (error.response && error.response.status === 404) {
       return false;
     }
     
     console.error('Error checking if post exists:', error);
-    return false; // Assume it doesn't exist to avoid duplicates
+    return false; 
   }
 }
 
-// Create a post with retry logic
 async function createPostWithRetry(match, maxRetries = CONFIG.maxRetries) {
   let delay = CONFIG.requestDelay;
   
@@ -157,7 +137,6 @@ async function createPostWithRetry(match, maxRetries = CONFIG.maxRetries) {
         return null;
       }
       
-      // Increase delay if rate limited
       if (isRateLimited) {
         delay *= CONFIG.backoffMultiplier;
         console.log(`Rate limiting detected. Retrying in ${delay}ms (Attempt ${attempt}/${maxRetries})`);
@@ -165,7 +144,6 @@ async function createPostWithRetry(match, maxRetries = CONFIG.maxRetries) {
         console.log(`Error creating post. Retrying in ${delay}ms (Attempt ${attempt}/${maxRetries})`);
       }
       
-      // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
@@ -173,19 +151,15 @@ async function createPostWithRetry(match, maxRetries = CONFIG.maxRetries) {
   return null;
 }
 
-// Create a blog post for a match
 async function createPost(match) {
   try {
-    // Generate post title
     const title = `${match.homeTeam} vs ${match.awayTeam} - ${match.league}`;
     
-    // Check if post already exists
     const exists = await checkPostExists(title);
     if (exists) {
       return null;
     }
     
-    // Create a URL-friendly slug
     const slugify = text => text
       .toString()
       .toLowerCase()
@@ -198,20 +172,15 @@ async function createPost(match) {
     
     const slug = `${slugify(match.homeTeam)}-vs-${slugify(match.awayTeam)}`;
     
-    // Get the current date for the post
     const now = new Date();
     const dateString = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
     
-    // Generate an engaging title for the post
     const postTitle = `${match.homeTeam} Faces ${match.awayTeam} in Thrilling ${match.league} Match Tonight`;
     
-    // Create an engaging introduction paragraph
     const introText = `On ${dateString}, football fans are gearing up for an electrifying showdown as ${match.homeTeam} takes on ${match.awayTeam} in the ${match.league}. Kicking off at ${match.time}, this high-stakes match promises to be a tactical battle between two formidable sides.`;
     
-    // Create a second paragraph about the teams
     const teamsText = `${match.homeTeam} enters the match with determination, looking to secure a vital victory. Meanwhile, ${match.awayTeam} will aim to counter with their own strengths. With broadcasting available on ${match.broadcaster}, fans won't want to miss this exciting clash.`;
     
-    // Create the HTML content with your preferred format
     const content = `
     <p>&nbsp;<b style="background-color: white; font-size: 16px; text-align: center; white-space-collapse: preserve;">${postTitle}</b></p>
     <span face="Roboto, -apple-system, Apple Color Emoji, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen-Sans, Ubuntu, Cantarell, Helvetica Neue, sans-serif" style="background-color: #e3fee0; font-size: 16px; white-space-collapse: preserve;">
@@ -264,7 +233,6 @@ async function createPost(match) {
     </p>
     `;
     
-    // Use axios to create the post with API key (no OAuth)
     const url = `https://www.googleapis.com/blogger/v3/blogs/${CONFIG.blogId}/posts?key=${CONFIG.apiKey}`;
     
     const response = await axios.post(url, {
@@ -282,34 +250,29 @@ async function createPost(match) {
     if (error.response) {
       console.error('Error details:', error.response.data);
     }
-    throw error; // Rethrow for retry mechanism
+    throw error; 
   }
 }
 
-// Main function to create match posts
 async function createMatchPosts() {
   try {
     console.log('Starting to create match posts...');
     
-    // Check if required environment variables are set
     if (!CONFIG.blogId || !CONFIG.apiKey) {
       console.error('Missing required environment variables. Please set BLOG_ID and API_KEY.');
       return 0;
     }
     
-    // Fetch both today's and tomorrow's matches
     console.log('Fetching today\'s matches...');
     const todayMatches = await fetchMatches('today');
     
     console.log('Fetching tomorrow\'s matches...');
     const tomorrowMatches = await fetchMatches('tomorrow');
     
-    // Combine all matches
     const allMatches = [...todayMatches, ...tomorrowMatches];
     
     console.log(`Found ${todayMatches.length} matches for today and ${tomorrowMatches.length} matches for tomorrow (${allMatches.length} total)`);
     
-    // Create posts for all matches with proper delays
     let createdCount = 0;
     for (const match of allMatches) {
       const post = await createPostWithRetry(match);
@@ -317,7 +280,6 @@ async function createMatchPosts() {
         createdCount++;
       }
       
-      // Add a delay between requests to avoid rate limits
       await new Promise(resolve => setTimeout(resolve, CONFIG.requestDelay));
     }
     
@@ -329,7 +291,6 @@ async function createMatchPosts() {
   }
 }
 
-// Start the process
 createMatchPosts().catch(error => {
   console.error('Error in main process:', error);
   process.exit(1);
