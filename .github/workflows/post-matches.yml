@@ -18,11 +18,13 @@ jobs:
       - name: Install dependencies
         run: npm install axios cheerio
         
-      - name: Debug Environment Variables
+      - name: Check Environment Variables
         run: |
           echo "Checking for environment variable availability..."
           echo "BLOG_ID is set: ${{ secrets.BLOG_ID != '' }}"
-          echo "API_KEY is set: ${{ secrets.API_KEY != '' }}"
+          echo "CLIENT_ID is set: ${{ secrets.CLIENT_ID != '' }}"
+          echo "CLIENT_SECRET is set: ${{ secrets.CLIENT_SECRET != '' }}"
+          echo "REFRESH_TOKEN is set: ${{ secrets.REFRESH_TOKEN != '' }}"
         
       - name: Run match posting script
         run: node match-bot.js
