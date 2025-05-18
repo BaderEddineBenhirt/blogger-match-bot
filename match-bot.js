@@ -310,7 +310,7 @@ async function createMatchPosts() {
     
     const bloggerClient = await getBloggerClient();
     
-$    console.log('Fetching today\'s matches...');
+    console.log('Fetching today\'s matches...');
     const todayMatches = await fetchMatches('today');
     
     console.log('Fetching tomorrow\'s matches...');
