@@ -1,9 +1,16 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+const { google } = require('googleapis');
+const fs = require('fs');
+const path = require('path');
 
 const CONFIG = {
+  clientId: process.env.CLIENT_ID,
+  clientSecret: process.env.CLIENT_SECRET,
+  
   blogId: process.env.BLOG_ID,
-  apiKey: process.env.API_KEY,
+  
+  refreshToken: process.env.REFRESH_TOKEN,
   
   matchSources: {
     yesterday: 'https://www.kooraliive.com/matches-yesterday/',
@@ -22,6 +29,60 @@ const CONFIG = {
   backoffMultiplier: 1.5
 };
 
+function debugEnvironmentVariables() {
+  console.log('Environment variables:');
+  console.log('BLOG_ID:', process.env.BLOG_ID ? 'Set (value hidden)' : 'Not set');
+  console.log('CLIENT_ID:', process.env.CLIENT_ID ? 'Set (value hidden)' : 'Not set');
+  console.log('CLIENT_SECRET:', process.env.CLIENT_SECRET ? 'Set (value hidden)' : 'Not set');
+  console.log('REFRESH_TOKEN:', process.env.REFRESH_TOKEN ? 'Set (value hidden)' : 'Not set');
+  
+  console.log('\nChecking alternative variable names:');
+  console.log('BLOGGER_API_KEY:', process.env.BLOGGER_API_KEY ? 'Set (value hidden)' : 'Not set');
+  console.log('API_KEY:', process.env.API_KEY ? 'Set (value hidden)' : 'Not set');
+}
+
+async function getOAuth2Client() {
+  debugEnvironmentVariables();
+  
+  try {
+    if (!CONFIG.clientId || !CONFIG.clientSecret || !CONFIG.refreshToken) {
+      throw new Error('Missing required OAuth credentials. Please set CLIENT_ID, CLIENT_SECRET, and REFRESH_TOKEN environment variables.');
+    }
+
+    const oauth2Client = new google.auth.OAuth2(
+      CONFIG.clientId,
+      CONFIG.clientSecret,
+      'https://developers.google.com/oauthplayground'
+    );
+    
+    oauth2Client.setCredentials({
+      refresh_token: CONFIG.refreshToken
+    });
+    
+    const tokenInfo = await oauth2Client.getAccessToken();
+    console.log('Successfully refreshed access token');
+    
+    return oauth2Client;
+  } catch (error) {
+    console.error('Error setting up OAuth client:', error);
+    throw error;
+  }
+}
+
+async function getBloggerClient() {
+  try {
+    const oauth2Client = await getOAuth2Client();
+    
+    return google.blogger({
+      version: 'v3',
+      auth: oauth2Client
+    });
+  } catch (error) {
+    console.error('Error initializing Blogger client:', error);
+    throw error;
+  }
+}
+
 async function fetchMatches(day = 'today') {
   try {
     if (!CONFIG.matchSources[day]) {
@@ -33,7 +94,7 @@ async function fetchMatches(day = 'today') {
     console.log(`Fetching matches for ${day} from ${url}`);
     
     const response = await axios.get(CONFIG.corsProxy + encodeURIComponent(url), {
-      timeout: 30000,
+      timeout: 30000, 
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       }
@@ -101,10 +162,12 @@ async function fetchMatches(day = 'today') {
   }
 }
 
-async function checkPostExists(title) {
+async function checkPostExists(title, bloggerClient) {
   try {
-    const searchUrl = `https://www.googleapis.com/blogger/v3/blogs/${CONFIG.blogId}/posts/search?q=${encodeURIComponent(title)}&key=${CONFIG.apiKey}`;
-    const response = await axios.get(searchUrl);
+    const response = await bloggerClient.posts.search({
+      blogId: CONFIG.blogId,
+      q: title
+    });
     
     if (response.data.items && response.data.items.length > 0) {
       console.log(`Post with similar title already exists: ${title}`);
@@ -122,12 +185,12 @@ async function checkPostExists(title) {
   }
 }
 
-async function createPostWithRetry(match, maxRetries = CONFIG.maxRetries) {
+async function createPostWithRetry(match, bloggerClient, maxRetries = CONFIG.maxRetries) {
   let delay = CONFIG.requestDelay;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await createPost(match);
+      return await createPost(match, bloggerClient);
     } catch (error) {
       const isRateLimited = error.response && (error.response.status === 429 || error.response.status === 403);
       const isLastAttempt = attempt === maxRetries;
@@ -151,11 +214,11 @@ async function createPostWithRetry(match, maxRetries = CONFIG.maxRetries) {
   return null;
 }
 
-async function createPost(match) {
+async function createPost(match, bloggerClient) {
   try {
     const title = `${match.homeTeam} vs ${match.awayTeam} - ${match.league}`;
     
-    const exists = await checkPostExists(title);
+    const exists = await checkPostExists(title, bloggerClient);
     if (exists) {
       return null;
     }
@@ -233,14 +296,15 @@ async function createPost(match) {
     </p>
     `;
     
-    const url = `https://www.googleapis.com/blogger/v3/blogs/${CONFIG.blogId}/posts?key=${CONFIG.apiKey}`;
-    
-    const response = await axios.post(url, {
-      kind: 'blogger#post',
-      blog: { id: CONFIG.blogId },
-      title: title,
-      content: content,
-      url: `https://badertalks.blogspot.com/${new Date().getFullYear()}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}/${slug}.html`
+    const response = await bloggerClient.posts.insert({
+      blogId: CONFIG.blogId,
+      requestBody: {
+        kind: 'blogger#post',
+        blog: { id: CONFIG.blogId },
+        title: title,
+        content: content,
+        url: `https://badertalks.blogspot.com/${new Date().getFullYear()}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}/${slug}.html`
+      }
     });
     
     console.log(`Post created: ${response.data.url}`);
@@ -250,7 +314,7 @@ async function createPost(match) {
     if (error.response) {
       console.error('Error details:', error.response.data);
     }
-    throw error; 
+    throw error;
   }
 }
 
@@ -258,10 +322,12 @@ async function createMatchPosts() {
   try {
     console.log('Starting to create match posts...');
     
-    if (!CONFIG.blogId || !CONFIG.apiKey) {
-      console.error('Missing required environment variables. Please set BLOG_ID and API_KEY.');
+    if (!CONFIG.blogId || !CONFIG.clientId || !CONFIG.clientSecret || !CONFIG.refreshToken) {
+      console.error('Missing required environment variables. Please set BLOG_ID, CLIENT_ID, CLIENT_SECRET, and REFRESH_TOKEN.');
       return 0;
     }
+    
+    const bloggerClient = await getBloggerClient();
     
     console.log('Fetching today\'s matches...');
     const todayMatches = await fetchMatches('today');
@@ -275,7 +341,7 @@ async function createMatchPosts() {
     
     let createdCount = 0;
     for (const match of allMatches) {
-      const post = await createPostWithRetry(match);
+      const post = await createPostWithRetry(match, bloggerClient);
       if (post) {
         createdCount++;
       }
