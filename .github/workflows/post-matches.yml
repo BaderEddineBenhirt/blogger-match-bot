@@ -23,5 +23,7 @@ jobs:
         run: node match-bot.js
         env:
           BLOG_ID: ${{ secrets.BLOG_ID }}
-          BLOGGER_API_KEY: ${{ secrets.BLOGGER_API_KEY }}
-          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
+          
