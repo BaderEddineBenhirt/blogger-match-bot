@@ -1,137 +1,192 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
-const { google } = require('googleapis');
 
 const BLOG_ID = process.env.BLOG_ID;
-const CLIENT_ID = process.env.CLIENT_ID;
-const CLIENT_SECRET = process.env.CLIENT_SECRET;
-const REFRESH_TOKEN = process.env.REFRESH_TOKEN;
+const API_KEY = process.env.BLOGGER_API_KEY;
+const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 
-const MATCH_SOURCES = {
-  yesterday: 'https://www.kooraliive.com/matches-yesterday/',
-  today: 'https://www.kooraliive.com/matches-today/',
-  tomorrow: 'https://www.kooraliive.com/matches-tomorrow/'
-};
-const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
-const DEFAULT_STREAM_URL = 'https://live4all.net/frame.php?ch=bein3';
-const REQUEST_DELAY = 2000;
-const MAX_RETRIES = 3;
-const BACKOFF_MULTIPLIER = 1.5;
-
-async function getOAuth2Client() {
-  if (!CLIENT_ID || !CLIENT_SECRET || !REFRESH_TOKEN) {
-    throw new Error('Missing environment variables for OAuth');
-  }
-  const oauth2Client = new google.auth.OAuth2(
-    CLIENT_ID,
-    CLIENT_SECRET,
-    'https://developers.google.com/oauthplayground'
-  );
-  oauth2Client.setCredentials({ refresh_token: REFRESH_TOKEN });
-  await oauth2Client.getAccessToken();
-  return oauth2Client;
-}
-
-async function getBloggerClient() {
-  const oauth2Client = await getOAuth2Client();
-  return google.blogger({ version: 'v3', auth: oauth2Client });
-}
-
-async function fetchMatches(day = 'today') {
-  if (!MATCH_SOURCES[day]) return [];
-  const url = MATCH_SOURCES[day];
-  const response = await axios.get(CORS_PROXY + encodeURIComponent(url), {
-    timeout: 30000,
-    headers: {
-      'User-Agent': 'Mozilla/5.0'
+async function fetchMatches(day = 'tomorrow') {
+  try {
+    let url;
+    if (day === 'yesterday') {
+      url = 'https://www.kooraliive.com/matches-yesterday/';
+    } else if (day === 'today') {
+      url = 'https://www.kooraliive.com/matches-today/';
+    } else {
+      url = 'https://www.kooraliive.com/matches-tomorrow/';
     }
-  });
-  const html = response.data;
-  const $ = cheerio.load(html);
-  const matches = [];
-  $('.AY_Match').each((index, element) => {
-    const homeTeam = $(element).find('.TM1 .TM_Name').text().trim();
-    const awayTeam = $(element).find('.TM2 .TM_Name').text().trim();
-    if (!homeTeam || !awayTeam) return;
-    let homeTeamLogo = $(element).find('.TM1 .TM_Logo img').attr('src');
-    if (homeTeamLogo && homeTeamLogo.includes('data:image/gif;base64')) {
-      homeTeamLogo = $(element).find('.TM1 .TM_Logo img').attr('data-src');
-    }
-    let awayTeamLogo = $(element).find('.TM2 .TM_Logo img').attr('src');
-    if (awayTeamLogo && awayTeamLogo.includes('data:image/gif;base64')) {
-      awayTeamLogo = $(element).find('.TM2 .TM_Logo img').attr('data-src');
-    }
-    const time = $(element).find('.MT_Time').text().trim();
-    const league = $(element).find('.MT_Info li:last-child span').text().trim();
-    const broadcaster = $(element).find('.MT_Info li:first-child span').text().trim();
-    const matchUrl = $(element).find('a').attr('href') || '';
-    matches.push({
-      id: `${day}-${index}`,
-      homeTeam,
-      awayTeam,
-      homeTeamLogo: homeTeamLogo || '',
-      awayTeamLogo: awayTeamLogo || '',
-      time: time || 'TBD',
-      league: league || 'Football Match',
-      broadcaster: broadcaster || 'TBD',
-      date: day,
-      matchUrl
+    
+    console.log(`Fetching matches for ${day} from ${url}`);
+    
+    const corsProxy = 'https://api.allorigins.win/raw?url=';
+    const response = await axios.get(corsProxy + encodeURIComponent(url));
+    const html = response.data;
+    
+    const $ = cheerio.load(html);
+    const matches = [];
+    
+    $('.AY_Match').each((index, element) => {
+      try {
+        const homeTeam = $(element).find('.TM1 .TM_Name').text().trim();
+        const awayTeam = $(element).find('.TM2 .TM_Name').text().trim();
+        
+        let homeTeamLogo = $(element).find('.TM1 .TM_Logo img').attr('src');
+        if (homeTeamLogo && homeTeamLogo.includes('data:image/gif;base64')) {
+          homeTeamLogo = $(element).find('.TM1 .TM_Logo img').attr('data-src');
+        }
+        
+        let awayTeamLogo = $(element).find('.TM2 .TM_Logo img').attr('src');
+        if (awayTeamLogo && awayTeamLogo.includes('data:image/gif;base64')) {
+          awayTeamLogo = $(element).find('.TM2 .TM_Logo img').attr('data-src');
+        }
+        
+        const time = $(element).find('.MT_Time').text().trim();
+        const league = $(element).find('.MT_Info li:last-child span').text().trim();
+        const broadcaster = $(element).find('.MT_Info li:first-child span').text().trim();
+        
+        if (!homeTeam || !awayTeam) {
+          console.log(`Skipping match #${index} - missing team data`);
+          return;
+        }
+        
+        const match = {
+          id: `${day}-${index}`,
+          homeTeam,
+          awayTeam,
+          homeTeamLogo: homeTeamLogo || '',
+          awayTeamLogo: awayTeamLogo || '',
+          time: time || 'TBD',
+          league: league || 'Football Match',
+          broadcaster: broadcaster || 'TBD',
+          date: day
+        };
+        
+        matches.push(match);
+      } catch (error) {
+        console.error(`Error parsing match ${index}:`, error);
+      }
     });
-  });
-  return matches;
-}
-
-async function checkPostExists(title, bloggerClient) {
-  if (!BLOG_ID) throw new Error('BLOG_ID not set');
-  const response = await bloggerClient.posts.search({
-    blogId: BLOG_ID,
-    q: title
-  });
-  return response.data.items && response.data.items.length > 0;
-}
-
-async function createPostWithRetry(match, bloggerClient, maxRetries = MAX_RETRIES) {
-  let delay = REQUEST_DELAY;
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await createPost(match, bloggerClient);
-    } catch (error) {
-      const rateLimit = error.response && (error.response.status === 429 || error.response.status === 403);
-      if (attempt === maxRetries) return null;
-      if (rateLimit) delay *= BACKOFF_MULTIPLIER;
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
+    
+    console.log(`Found ${matches.length} matches for ${day}`);
+    return matches;
+  } catch (error) {
+    console.error('Error fetching matches:', error);
+    return [];
   }
-  return null;
 }
 
-async function createPost(match, bloggerClient) {
-  if (!BLOG_ID) throw new Error('BLOG_ID not set');
-  const title = `${match.homeTeam} vs ${match.awayTeam} - ${match.league}`;
-  const exists = await checkPostExists(title, bloggerClient);
-  if (exists) return null;
-  const slugify = text => text.toString().toLowerCase().trim().replace(/\s+/g, '-').replace(/[^\w\-]+/g, '').replace(/\-\-+/g, '-').replace(/^-+/, '').replace(/-+$/, '');
-  const slug = `${slugify(match.homeTeam)}-vs-${slugify(match.awayTeam)}`;
-  const now = new Date();
-  const dateString = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
-  const postTitle = `${match.homeTeam} Faces ${match.awayTeam} in ${match.league} - ${dateString}`;
-  const content = `
-    <h2>${match.homeTeam} vs ${match.awayTeam}</h2>
-    <p><strong>Time:</strong> ${match.time}</p>
-    <p><strong>League:</strong> ${match.league}</p>
-    <p><strong>Broadcasted on:</strong> ${match.broadcaster}</p>
-    <p><a href="${match.matchUrl || DEFAULT_STREAM_URL}" target="_blank">Watch Live</a></p>
-    <img src="${match.homeTeamLogo}" alt="${match.homeTeam}" width="100"/>
-    <span>vs</span>
-    <img src="${match.awayTeamLogo}" alt="${match.awayTeam}" width="100"/>
-  `;
-  return await bloggerClient.posts.insert({
-    blogId: BLOG_ID,
-    requestBody: {
-      title: postTitle,
-      content,
-      labels: [match.league, match.date],
-      url: `/${slug}`
+async function checkPostExists(title) {
+  try {
+    const searchUrl = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/search?q=${encodeURIComponent(title)}&key=${API_KEY}`;
+    const response = await axios.get(searchUrl);
+    
+    if (response.data.items && response.data.items.length > 0) {
+      console.log(`Post with similar title already exists: ${title}`);
+      return true;
     }
-  });
+    
+    return false;
+  } catch (error) {
+    console.error('Error checking if post exists:', error);
+    return false;
+  }
 }
+
+async function createPost(match) {
+  try {
+    const title = `${match.homeTeam} vs ${match.awayTeam} - ${match.league}`;
+    
+    const exists = await checkPostExists(title);
+    if (exists) {
+      return null;
+    }
+    
+    const slugify = text => text
+      .toString()
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^\w\-]+/g, '')
+      .replace(/\-\-+/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-+$/, '');
+    
+    const slug = `${slugify(match.homeTeam)}-vs-${slugify(match.awayTeam)}`;
+    
+    const content = `
+      <div class="match-details">
+        <h2>${match.league}</h2>
+        <div class="teams">
+          <div class="team home">
+            <img src="${match.homeTeamLogo}" alt="${match.homeTeam}">
+            <h3>${match.homeTeam}</h3>
+          </div>
+          <div class="match-time">
+            <p>${match.time}</p>
+            <p>${match.date === 'today' ? 'اليوم' : match.date === 'tomorrow' ? 'غداً' : 'أمس'}</p>
+          </div>
+          <div class="team away">
+            <img src="${match.awayTeamLogo}" alt="${match.awayTeam}">
+            <h3>${match.awayTeam}</h3>
+          </div>
+        </div>
+        <div class="match-info">
+          <p>📺 ${match.broadcaster}</p>
+        </div>
+        <div id="match-player">
+          <div class="player-container">
+            <p>سيتم إضافة بث المباراة قبل موعد المباراة</p>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/`;
+    
+    const response = await axios.post(url, {
+      kind: 'blogger#post',
+      blog: { id: BLOG_ID },
+      title: title,
+      content: content,
+      url: `https://badertalks.blogspot.com/${new Date().getFullYear()}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}/${slug}.html`
+    },
+      {
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    
+    console.log(`Post created: ${response.data.url}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error creating post:', error);
+    if (error.response) {
+      console.error('Error details:', error.response.data);
+    }
+    return null;
+  }
+}
+
+async function createMatchPosts() {
+  try {
+    console.log('Starting to create match posts...');
+    
+    const matches = await fetchMatches('tomorrow');
+    
+    let createdCount = 0;
+    for (const match of matches) {
+      const post = await createPost(match);
+      if (post) {
+        createdCount++;
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    
+    console.log(`Finished creating match posts. Created ${createdCount} new posts.`);
+  } catch (error) {
+    console.error('Error in createMatchPosts:', error);
+  }
+}
+
+createMatchPosts();
