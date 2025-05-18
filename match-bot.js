@@ -148,7 +148,13 @@ async function createPost(match) {
       title: title,
       content: content,
       url: `https://badertalks.blogspot.com/${new Date().getFullYear()}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}/${slug}.html`
-    });
+    },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
     
     console.log(`Post created: ${response.data.url}`);
     return response.data;
