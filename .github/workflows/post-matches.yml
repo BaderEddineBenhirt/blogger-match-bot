@@ -1,9 +1,8 @@
 name: Post Matches to Blogger
-
 on:
   schedule:
-    - cron: '0 1 * * *'  # Run at 1 AM UTC daily
-  workflow_dispatch:     # Allow manual triggering
+    - cron: '0 1 * * *'  
+  workflow_dispatch:     
 
 jobs:
   post-matches:
@@ -17,13 +16,16 @@ jobs:
           node-version: '18'
           
       - name: Install dependencies
-        run: npm i
+        run: npm install axios cheerio
+        
+      - name: Debug Environment Variables
+        run: |
+          echo "Checking for environment variable availability..."
+          echo "BLOG_ID is set: ${{ secrets.BLOG_ID != '' }}"
+          echo "API_KEY is set: ${{ secrets.API_KEY != '' }}"
         
       - name: Run match posting script
         run: node match-bot.js
         env:
           BLOG_ID: ${{ secrets.BLOG_ID }}
-          CLIENT_ID: ${{ secrets.CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-          REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
-          
+          API_KEY: ${{ secrets.API_KEY }}
