@@ -3,7 +3,6 @@ const cheerio = require('cheerio');
 
 const BLOG_ID = process.env.BLOG_ID;
 const API_KEY = process.env.BLOGGER_API_KEY;
-const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 
 async function fetchMatches(day = 'tomorrow') {
   try {
@@ -141,7 +140,8 @@ async function createPost(match) {
       </div>
     `;
     
-    const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/`;
+    // Important: Use API Key authentication instead of OAuth2
+    const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts?key=${API_KEY}`;
     
     const response = await axios.post(url, {
       kind: 'blogger#post',
@@ -149,13 +149,7 @@ async function createPost(match) {
       title: title,
       content: content,
       url: `https://badertalks.blogspot.com/${new Date().getFullYear()}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}/${slug}.html`
-    },
-      {
-        headers: {
-          Authorization: `Bearer ${ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      });
+    });
     
     console.log(`Post created: ${response.data.url}`);
     return response.data;
