@@ -43,6 +43,9 @@ async function fetchMatches(day = 'tomorrow') {
         const league = $(element).find('.MT_Info li:last-child span').text().trim();
         const broadcaster = $(element).find('.MT_Info li:first-child span').text().trim();
         
+        // Get match URL for the live stream
+        const matchUrl = $(element).find('a').attr('href') || '';
+        
         if (!homeTeam || !awayTeam) {
           console.log(`Skipping match #${index} - missing team data`);
           return;
@@ -57,7 +60,8 @@ async function fetchMatches(day = 'tomorrow') {
           time: time || 'TBD',
           league: league || 'Football Match',
           broadcaster: broadcaster || 'TBD',
-          date: day
+          date: day,
+          matchUrl: matchUrl
         };
         
         matches.push(match);
@@ -93,6 +97,7 @@ async function checkPostExists(title) {
 
 async function createPost(match) {
   try {
+    // Generate post title similar to the example
     const title = `${match.homeTeam} vs ${match.awayTeam} - ${match.league}`;
     
     const exists = await checkPostExists(title);
@@ -112,35 +117,77 @@ async function createPost(match) {
     
     const slug = `${slugify(match.homeTeam)}-vs-${slugify(match.awayTeam)}`;
     
+    // Get the current date for the post
+    const now = new Date();
+    const dateString = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+    
+    // Generate an engaging title for the post
+    const postTitle = `${match.homeTeam} Faces ${match.awayTeam} in Thrilling ${match.league} Match Tonight`;
+    
+    // Create an engaging introduction paragraph
+    const introText = `On ${dateString}, football fans are gearing up for an electrifying showdown as ${match.homeTeam} takes on ${match.awayTeam} in the ${match.league}. Kicking off at ${match.time}, this high-stakes match promises to be a tactical battle between two formidable sides.`;
+    
+    // Create a second paragraph about the teams
+    const teamsText = `${match.homeTeam} enters the match with determination, looking to secure a vital victory. Meanwhile, ${match.awayTeam} will aim to counter with their own strengths. With broadcasting available on ${match.broadcaster}, fans won't want to miss this exciting clash.`;
+    
+    // Generate a combined team logo image URL (can be customized further)
+    const combinedImageUrl = `https://i.ibb.co/SvKz0KD/vs-template.png`;
+    
+    // Create the HTML content with your preferred format
     const content = `
-      <div class="match-details">
-        <h2>${match.league}</h2>
-        <div class="teams">
-          <div class="team home">
-            <img src="${match.homeTeamLogo}" alt="${match.homeTeam}">
-            <h3>${match.homeTeam}</h3>
+    <p>&nbsp;<b style="background-color: white; font-size: 16px; text-align: center; white-space-collapse: preserve;">${postTitle}</b></p>
+    <span face="Roboto, -apple-system, Apple Color Emoji, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen-Sans, Ubuntu, Cantarell, Helvetica Neue, sans-serif" style="background-color: #e3fee0; font-size: 16px; white-space-collapse: preserve;">
+      <b>
+        <div style="text-align: center;">${introText}</div>
+        <div style="text-align: center;">${teamsText}</div>
+      </b>
+    </span>
+    <p></p>
+    <p style="text-align: center;">
+      <span face="Roboto, -apple-system, Apple Color Emoji, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen-Sans, Ubuntu, Cantarell, Helvetica Neue, sans-serif" style="background-color: #e3fee0; font-size: 16px; white-space-collapse: preserve;">
+        <b><br /></b>
+      </span>
+    </p>
+    
+    <div class="separator" style="clear: both; text-align: center;">
+      <b>
+        <div style="display: flex; justify-content: center; align-items: center; margin: 20px 0;">
+          <div style="text-align: center; margin: 0 20px;">
+            <img src="${match.homeTeamLogo}" alt="${match.homeTeam}" width="100" height="100" />
+            <p>${match.homeTeam}</p>
           </div>
-          <div class="match-time">
-            <p>${match.time}</p>
-            <p>${match.date === 'today' ? 'اليوم' : match.date === 'tomorrow' ? 'غداً' : 'أمس'}</p>
-          </div>
-          <div class="team away">
-            <img src="${match.awayTeamLogo}" alt="${match.awayTeam}">
-            <h3>${match.awayTeam}</h3>
+          <div style="font-size: 24px; font-weight: bold; margin: 0 15px;">VS</div>
+          <div style="text-align: center; margin: 0 20px;">
+            <img src="${match.awayTeamLogo}" alt="${match.awayTeam}" width="100" height="100" />
+            <p>${match.awayTeam}</p>
           </div>
         </div>
-        <div class="match-info">
-          <p>📺 ${match.broadcaster}</p>
-        </div>
-        <div id="match-player">
-          <div class="player-container">
-            <p>سيتم إضافة بث المباراة قبل موعد المباراة</p>
-          </div>
-        </div>
-      </div>
+      </b>
+    </div>
+    
+    <b style="background-color: white;"><br /><br /></b>
+    
+    <p style="text-align: center;">
+      <span face="Roboto, -apple-system, Apple Color Emoji, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen-Sans, Ubuntu, Cantarell, Helvetica Neue, sans-serif" style="font-size: 16px; white-space-collapse: preserve;">
+        <b style="background-color: white;">Match Time: ${match.time} | Competition: ${match.league} | Broadcaster: ${match.broadcaster}</b>
+      </span>
+    </p>
+    
+    <p style="text-align: center;">
+      <span face="Roboto, -apple-system, Apple Color Emoji, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen-Sans, Ubuntu, Cantarell, Helvetica Neue, sans-serif" style="font-size: 16px; white-space-collapse: preserve;">
+        <b style="background-color: white;"><iframe allowfullscreen="" frameborder="0" height="400" src="https://live4all.net/frame.php?ch=bein3" width="100%"></iframe></b>
+      </span>
+    </p>
+    
+    <p style="text-align: center;">
+      <span face="Roboto, -apple-system, Apple Color Emoji, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen-Sans, Ubuntu, Cantarell, Helvetica Neue, sans-serif" style="font-size: 16px; white-space-collapse: preserve;">
+        <b style="background-color: white;">Don't miss this exciting matchup between ${match.homeTeam} and ${match.awayTeam}. Which team do you think will come out on top? Share your predictions in the comments below!</b>
+      </span>
+    </p>
     `;
     
-    const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/`;
+    // Important: Use API Key authentication with the correct URL
+    const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts?key=${API_KEY}`;
     
     const response = await axios.post(url, {
       kind: 'blogger#post',
@@ -165,22 +212,26 @@ async function createMatchPosts() {
   try {
     console.log('Starting to create match posts...');
     
+    // Fetch both today's and tomorrow's matches
     console.log('Fetching today\'s matches...');
     const todayMatches = await fetchMatches('today');
     
     console.log('Fetching tomorrow\'s matches...');
     const tomorrowMatches = await fetchMatches('tomorrow');
     
+    // Combine all matches
     const allMatches = [...todayMatches, ...tomorrowMatches];
     
     console.log(`Found ${todayMatches.length} matches for today and ${tomorrowMatches.length} matches for tomorrow (${allMatches.length} total)`);
     
+    // Create posts for all matches
     let createdCount = 0;
     for (const match of allMatches) {
       const post = await createPost(match);
       if (post) {
         createdCount++;
       }
+      // Add a small delay between requests to avoid rate limits
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
     
@@ -190,4 +241,5 @@ async function createMatchPosts() {
   }
 }
 
+// Start the process
 createMatchPosts();
