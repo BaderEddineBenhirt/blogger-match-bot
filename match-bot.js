@@ -306,6 +306,7 @@ async function createPost(match, bloggerClient) {
     
     const response = await bloggerClient.posts.insert({
       blogId: BLOG_ID,
+      auth: oauth2Client,
       requestBody: {
         kind: 'blogger#post',
         blog: { id: BLOG_ID },
