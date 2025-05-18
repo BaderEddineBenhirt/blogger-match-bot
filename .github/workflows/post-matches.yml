@@ -1,0 +1,26 @@
+name: Post Matches to Blogger
+
+on:
+  schedule:
+    - cron: '0 1 * * *'  # Run at 1 AM UTC daily
+  workflow_dispatch:     # Allow manual triggering
+
+jobs:
+  post-matches:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run match posting script
+        run: node match-bot.js
+        env:
+          BLOG_ID: ${{ secrets.BLOG_ID }}
+          BLOGGER_API_KEY: ${{ secrets.BLOGGER_API_KEY }}
