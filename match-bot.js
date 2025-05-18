@@ -2,7 +2,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 
 const BLOG_ID = process.env.BLOG_ID;
-const API_KEY = process.env.BLOGGER_API_KEY;
+const API_KEY = process.env.API_KEY;
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 
 async function fetchMatches(day = 'tomorrow') {
