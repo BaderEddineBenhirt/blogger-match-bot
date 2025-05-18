@@ -140,7 +140,6 @@ async function createPost(match) {
       </div>
     `;
     
-    // Important: Use API Key authentication instead of OAuth2
     const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts?key=${API_KEY}`;
     
     const response = await axios.post(url, {
@@ -166,10 +165,18 @@ async function createMatchPosts() {
   try {
     console.log('Starting to create match posts...');
     
-    const matches = await fetchMatches('tomorrow');
+    console.log('Fetching today\'s matches...');
+    const todayMatches = await fetchMatches('today');
+    
+    console.log('Fetching tomorrow\'s matches...');
+    const tomorrowMatches = await fetchMatches('tomorrow');
+    
+    const allMatches = [...todayMatches, ...tomorrowMatches];
+    
+    console.log(`Found ${todayMatches.length} matches for today and ${tomorrowMatches.length} matches for tomorrow (${allMatches.length} total)`);
     
     let createdCount = 0;
-    for (const match of matches) {
+    for (const match of allMatches) {
       const post = await createPost(match);
       if (post) {
         createdCount++;
