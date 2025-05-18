@@ -31,6 +31,7 @@ jobs:
         env:
           BLOG_ID: ${{ secrets.BLOG_ID }}
           API_KEY: ${{ secrets.API_KEY }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
           REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
 
