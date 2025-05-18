@@ -151,7 +151,7 @@ async function createPost(match) {
     },
       {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${ACCESS_TOKEN}`,
           'Content-Type': 'application/json'
         }
       });
