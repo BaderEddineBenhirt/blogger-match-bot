@@ -1,9 +1,10 @@
-const axios = require('axios');
+const content = `
+      <div class="match-details" style="font-family: Arial, sans-serif; direction: rtconst axios = require('axios');
 const cheerio = require('cheerio');
 
 const BLOG_ID = process.env.BLOG_ID;
 const API_KEY = process.env.API_KEY;
-const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
+const ACCESS_TOKEN = process.env.ACCESS_TOKEN; 
 
 async function makeAuthenticatedRequest(url, data, method = 'GET') {
   const config = {
@@ -61,6 +62,7 @@ async function fetchMatches(day = 'tomorrow') {
         const league = $(element).find('.MT_Info li:last-child span').text().trim();
         const broadcaster = $(element).find('.MT_Info li:first-child span').text().trim();
         
+        // Get the match link for iframe extraction
         const matchLink = $(element).find('a').attr('href');
         
         if (!homeTeam || !awayTeam) {
@@ -106,7 +108,7 @@ async function extractIframeFromMatch(matchUrl) {
     
     const corsProxy = 'https://api.allorigins.win/raw?url=';
     const response = await axios.get(corsProxy + encodeURIComponent(matchUrl), {
-      timeout: 10000,
+      timeout: 15000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       }
@@ -117,34 +119,59 @@ async function extractIframeFromMatch(matchUrl) {
     let iframe = null;
     
     const iframeSelectors = [
-      'iframe[src*="youtube"]',
-      'iframe[src*="twitch"]',
-      'iframe[src*="stream"]',
+      '.entry-content iframe', 
+      '.entry iframe',
+      '#the-post iframe',
+      'article iframe',
+      '.post-content iframe',
+      'iframe[src*="alkoora"]', 
+      'iframe[src*="albaplayer"]',
       'iframe[src*="player"]',
-      'iframe[src*="embed"]',
-      '.video-player iframe',
-      '.player-container iframe',
-      '#player iframe',
-      '.stream-player iframe',
+      'iframe[src*="stream"]',
+      'iframe[src*="live"]',
+      'iframe[allowfullscreen]', 
+      'iframe[height="500px"]',   
       'iframe'
     ];
     
     for (const selector of iframeSelectors) {
-      const foundIframe = $(selector).first();
-      if (foundIframe.length > 0) {
-        const src = foundIframe.attr('src');
-        if (src && !src.includes('ads') && !src.includes('advertisement')) {
+      const foundIframes = $(selector);
+      
+      foundIframes.each((index, element) => {
+        const src = $(element).attr('src');
+        
+        if (src && 
+            !src.includes('ads') && 
+            !src.includes('advertisement') && 
+            !src.includes('banner') &&
+            !src.includes('aqle3.com') &&  
+            !src.includes('bvtpk.com') && 
+            src.length > 10) {  
+          
           iframe = {
             src: src.startsWith('//') ? `https:${src}` : src,
-            width: foundIframe.attr('width') || '100%',
-            height: foundIframe.attr('height') || '400',
-            allowfullscreen: foundIframe.attr('allowfullscreen') !== undefined,
-            frameborder: foundIframe.attr('frameborder') || '0'
+            width: $(element).attr('width') || '100%',
+            height: $(element).attr('height') || '500px',
+            allowfullscreen: $(element).attr('allowfullscreen') !== undefined,
+            frameborder: $(element).attr('frameborder') || '0',
+            scrolling: $(element).attr('scrolling') || 'no'
           };
-          console.log(`Found iframe: ${iframe.src}`);
-          break;
+          
+          console.log(`✅ Found iframe: ${iframe.src}`);
+          return false; 
         }
-      }
+      });
+      
+      if (iframe) break; 
+    }
+    
+    if (!iframe) {
+      const allIframes = $('iframe');
+      console.log(`No suitable iframe found. Total iframes on page: ${allIframes.length}`);
+      allIframes.each((index, element) => {
+        const src = $(element).attr('src');
+        console.log(`Iframe ${index + 1}: ${src}`);
+      });
     }
     
     return iframe;
@@ -186,25 +213,26 @@ async function createPost(match) {
     
     let playerSection;
     if (iframeData) {
-      playerSection = `
-        <div id="match-player">
-          <div class="player-container">
+      const bloggerSafeIframe = `
+        <div id="match-player" style="text-align: center; margin: 20px 0;">
+          <div class="player-container" style="position: relative; width: 100%; height: 0; padding-bottom: 56.25%; background: #000;">
             <iframe 
               src="${iframeData.src}" 
-              width="${iframeData.width}" 
-              height="${iframeData.height}"
-              frameborder="${iframeData.frameborder}"
-              ${iframeData.allowfullscreen ? 'allowfullscreen' : ''}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
+              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;"
+              allowfullscreen="allowfullscreen"
+              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+              loading="lazy">
             </iframe>
           </div>
         </div>`;
+      
+      playerSection = bloggerSafeIframe;
     } else {
       playerSection = `
-        <div id="match-player">
+        <div id="match-player" style="text-align: center; margin: 20px 0; padding: 20px; background: #f5f5f5; border-radius: 8px;">
           <div class="player-container">
-            <p>سيتم إضافة بث المباراة قبل موعد المباراة</p>
-            ${match.matchLink ? `<p><a href="${match.matchLink}" target="_blank">رابط المباراة</a></p>` : ''}
+            <p style="margin: 10px 0; color: #666;">سيتم إضافة بث المباراة قبل موعد المباراة</p>
+            ${match.matchLink ? `<p style="margin: 10px 0;"><a href="${match.matchLink}" target="_blank" rel="noopener" style="color: #1976d2; text-decoration: none;">🔗 رابط المباراة</a></p>` : ''}
           </div>
         </div>`;
     }
@@ -247,10 +275,25 @@ async function createPost(match) {
     console.log(`✅ Post created: ${response.data.url}`);
     return response.data;
   } catch (error) {
-    console.error('❌ Error creating post:', error);
-    if (error.response) {
-      console.error('Error details:', error.response.data);
+    if (error.response?.status === 403) {
+      const errorMessage = error.response?.data?.error?.message || 'Rate limit exceeded';
+      if (errorMessage.includes('limit') || errorMessage.includes('timeframe')) {
+        console.log(`⏸️  Rate limit hit for: ${match.homeTeam} vs ${match.awayTeam}`);
+        console.log(`⏳ Waiting 5 minutes before retrying...`);
+        await new Promise(resolve => setTimeout(resolve, 300000)); 
+        
+        try {
+          const retryResponse = await makeAuthenticatedRequest(url, postData, 'POST');
+          console.log(`✅ Post created after retry: ${retryResponse.data.url}`);
+          return retryResponse.data;
+        } catch (retryError) {
+          console.log(`❌ Still rate limited after 5 minutes, skipping: ${match.homeTeam} vs ${match.awayTeam}`);
+          return { skipped: true, reason: 'rate_limit' };
+        }
+      }
     }
+    
+    console.error('❌ Error creating post:', error.response?.data || error.message);
     return null;
   }
 }
@@ -276,16 +319,28 @@ async function createMatchPosts() {
     }
     
     let createdCount = 0;
+    let skippedCount = 0;
+    
     for (const match of matches) {
       console.log(`\n⚽ Processing: ${match.homeTeam} vs ${match.awayTeam}`);
       const post = await createPost(match);
-      if (post) {
+      
+      if (post && post.skipped) {
+        skippedCount++;
+      } else if (post) {
         createdCount++;
       }
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      if (createdCount > 0) {
+        console.log('⏳ Waiting 30 seconds to respect Blogger rate limits...');
+        await new Promise(resolve => setTimeout(resolve, 30000));
+      } else {
+        console.log('⏳ Waiting 5 seconds before next attempt...');
+        await new Promise(resolve => setTimeout(resolve, 5000)); 
+      }
     }
     
-    console.log(`\n🎉 Finished! Created ${createdCount} new posts.`);
+    console.log(`\n🎉 Finished! Created ${createdCount} new posts, skipped ${skippedCount} due to rate limits.`);
   } catch (error) {
     console.error('❌ Error in createMatchPosts:', error);
     process.exit(1);
