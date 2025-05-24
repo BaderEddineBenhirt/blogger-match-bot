@@ -1,26 +1,4 @@
-const content = `
-      <div class="match-details" style="font-family: Arial, sans-serif; direction: rtl; text-align: center;">
-        <h2 style="color: #1976d2; margin-bottom: 20px;">${match.league}</h2>
-        <div class="teams" style="display: flex; align-items: center; justify-content: space-between; margin: 20px 0; padding: 20px; background: #f5f5f5; border-radius: 10px;">
-          <div class="team home" style="text-align: center; flex: 1;">
-            ${match.homeTeamLogo ? `<img src="${match.homeTeamLogo}" alt="${match.homeTeam}" style="width: 80px; height: 80px; object-fit: contain; margin-bottom: 10px;">` : ''}
-            <h3 style="margin: 0; color: #333; font-size: 18px;">${match.homeTeam}</h3>
-          </div>
-          <div class="match-time" style="text-align: center; flex: 0 0 auto; margin: 0 20px;">
-            <p style="font-size: 24px; font-weight: bold; color: #1976d2; margin: 5px 0;">${match.time}</p>
-            <p style="font-size: 16px; color: #666; margin: 5px 0;">${match.date === 'today' ? 'اليوم' : match.date === 'tomorrow' ? 'غداً' : 'أمس'}</p>
-          </div>
-          <div class="team away" style="text-align: center; flex: 1;">
-            ${match.awayTeamLogo ? `<img src="${match.awayTeamLogo}" alt="${match.awayTeam}" style="width: 80px; height: 80px; object-fit: contain; margin-bottom: 10px;">` : ''}
-            <h3 style="margin: 0; color: #333; font-size: 18px;">${match.awayTeam}</h3>
-          </div>
-        </div>
-        <div class="match-info" style="margin: 20px 0; padding: 15px; background: #e3f2fd; border-radius: 8px;">
-          <p style="margin: 0; font-size: 16px; color: #1976d2;">📺 ${match.broadcaster}</p>
-        </div>
-        ${playerSection}
-      </div>
-    `;const axios = require('axios');
+const axios = require('axios');
 const cheerio = require('cheerio');
 
 const BLOG_ID = process.env.BLOG_ID;
