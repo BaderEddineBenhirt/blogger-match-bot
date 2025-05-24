@@ -22,7 +22,7 @@ async function makeAuthenticatedRequest(url, data, method = 'GET') {
   return await axios(config);
 }
 
-async function fetchMatches(day = 'tomorrow') {
+async function fetchMatches(day = 'today') {
   try {
     let url;
     if (day === 'yesterday') {
