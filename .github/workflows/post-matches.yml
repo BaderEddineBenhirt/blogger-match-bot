@@ -47,3 +47,5 @@ jobs:
           BLOG_ID: ${{ secrets.BLOG_ID }}
           API_KEY: ${{ secrets.API_KEY }}
           ACCESS_TOKEN: ${{ env.ACCESS_TOKEN }}
+          CLIENT_SECRET: ${{ env.CLIENT_SECRET }}
+          CLIENT_ID: ${{ env.CLIENT_ID }}
