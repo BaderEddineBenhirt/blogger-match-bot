@@ -3,68 +3,23 @@ const cheerio = require('cheerio');
 
 const BLOG_ID = process.env.BLOG_ID;
 const API_KEY = process.env.API_KEY;
-let ACCESS_TOKEN = null; 
-const REFRESH_TOKEN = process.env.REFRESH_TOKEN;
-const CLIENT_ID = process.env.CLIENT_ID;
-const CLIENT_SECRET = process.env.CLIENT_SECRET;
-
-async function refreshAccessToken() {
-  try {
-    console.log('🔄 Refreshing access token...');
-    const response = await axios.post('https://oauth2.googleapis.com/token', {
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-      refresh_token: REFRESH_TOKEN,
-      grant_type: 'refresh_token'
-    });
-    
-    ACCESS_TOKEN = response.data.access_token;
-    console.log('✅ Access token refreshed successfully');
-    return ACCESS_TOKEN;
-  } catch (error) {
-    console.error('❌ Error refreshing access token:', error.response?.data || error.message);
-    throw error;
-  }
-}
+const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 
 async function makeAuthenticatedRequest(url, data, method = 'GET') {
-  try {
-    const config = {
-      method,
-      url,
-      headers: {
-        Authorization: `Bearer ${ACCESS_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    };
-    
-    if (data && method !== 'GET') {
-      config.data = data;
+  const config = {
+    method,
+    url,
+    headers: {
+      Authorization: `Bearer ${ACCESS_TOKEN}`,
+      'Content-Type': 'application/json'
     }
-    
-    return await axios(config);
-  } catch (error) {
-    if (error.response?.status === 401) {
-      console.log('🔑 Token expired, refreshing...');
-      await refreshAccessToken();
-      
-      const config = {
-        method,
-        url,
-        headers: {
-          Authorization: `Bearer ${ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      };
-      
-      if (data && method !== 'GET') {
-        config.data = data;
-      }
-      
-      return await axios(config);
-    }
-    throw error;
+  };
+  
+  if (data && method !== 'GET') {
+    config.data = data;
   }
+  
+  return await axios(config);
 }
 
 async function fetchMatches(day = 'tomorrow') {
@@ -106,7 +61,6 @@ async function fetchMatches(day = 'tomorrow') {
         const league = $(element).find('.MT_Info li:last-child span').text().trim();
         const broadcaster = $(element).find('.MT_Info li:first-child span').text().trim();
         
-        // Get the match link for iframe extraction
         const matchLink = $(element).find('a').attr('href');
         
         if (!homeTeam || !awayTeam) {
@@ -160,10 +114,8 @@ async function extractIframeFromMatch(matchUrl) {
     
     const $ = cheerio.load(response.data);
     
-    // Look for various iframe patterns commonly used for video streaming
     let iframe = null;
     
-    // Try different selectors for iframes
     const iframeSelectors = [
       'iframe[src*="youtube"]',
       'iframe[src*="twitch"]',
@@ -191,40 +143,6 @@ async function extractIframeFromMatch(matchUrl) {
           };
           console.log(`Found iframe: ${iframe.src}`);
           break;
-        }
-      }
-    }
-    
-    // If no iframe found, look for video tags or embedded players
-    if (!iframe) {
-      // Look for video elements
-      const video = $('video source').first();
-      if (video.length > 0) {
-        const src = video.attr('src');
-        if (src) {
-          iframe = {
-            src: src.startsWith('//') ? `https:${src}` : src,
-            width: '100%',
-            height: '400',
-            isVideo: true
-          };
-          console.log(`Found video source: ${iframe.src}`);
-        }
-      }
-    }
-    
-    // Look for embedded player scripts or data attributes
-    if (!iframe) {
-      const playerData = $('[data-player]').first();
-      if (playerData.length > 0) {
-        const playerUrl = playerData.attr('data-player');
-        if (playerUrl) {
-          iframe = {
-            src: playerUrl.startsWith('//') ? `https:${playerUrl}` : playerUrl,
-            width: '100%',
-            height: '400'
-          };
-          console.log(`Found player data: ${iframe.src}`);
         }
       }
     }
@@ -264,49 +182,23 @@ async function createPost(match) {
     
     console.log(`Creating post for: ${title}`);
     
-    // Extract iframe from the match page
     const iframeData = await extractIframeFromMatch(match.matchLink);
     
-    const slugify = text => text
-      .toString()
-      .toLowerCase()
-      .trim()
-      .replace(/\s+/g, '-')
-      .replace(/[^\w\-]+/g, '')
-      .replace(/\-\-+/g, '-')
-      .replace(/^-+/, '')
-      .replace(/-+$/, '');
-    
-    const slug = `${slugify(match.homeTeam)}-vs-${slugify(match.awayTeam)}`;
-    
-    // Build the player section based on whether we found an iframe
     let playerSection;
     if (iframeData) {
-      if (iframeData.isVideo) {
-        playerSection = `
-          <div id="match-player">
-            <div class="player-container">
-              <video controls width="${iframeData.width}" height="${iframeData.height}">
-                <source src="${iframeData.src}" type="video/mp4">
-                Your browser does not support the video tag.
-              </video>
-            </div>
-          </div>`;
-      } else {
-        playerSection = `
-          <div id="match-player">
-            <div class="player-container">
-              <iframe 
-                src="${iframeData.src}" 
-                width="${iframeData.width}" 
-                height="${iframeData.height}"
-                frameborder="${iframeData.frameborder}"
-                ${iframeData.allowfullscreen ? 'allowfullscreen' : ''}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
-              </iframe>
-            </div>
-          </div>`;
-      }
+      playerSection = `
+        <div id="match-player">
+          <div class="player-container">
+            <iframe 
+              src="${iframeData.src}" 
+              width="${iframeData.width}" 
+              height="${iframeData.height}"
+              frameborder="${iframeData.frameborder}"
+              ${iframeData.allowfullscreen ? 'allowfullscreen' : ''}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
+            </iframe>
+          </div>
+        </div>`;
     } else {
       playerSection = `
         <div id="match-player">
@@ -352,10 +244,10 @@ async function createPost(match) {
     
     const response = await makeAuthenticatedRequest(url, postData, 'POST');
     
-    console.log(`Post created: ${response.data.url}`);
+    console.log(`✅ Post created: ${response.data.url}`);
     return response.data;
   } catch (error) {
-    console.error('Error creating post:', error);
+    console.error('❌ Error creating post:', error);
     if (error.response) {
       console.error('Error details:', error.response.data);
     }
@@ -365,32 +257,27 @@ async function createPost(match) {
 
 async function createMatchPosts() {
   try {
-    console.log('Starting to create match posts...');
+    console.log('🚀 Starting to create match posts...');
     
-    if (!BLOG_ID || !API_KEY || !REFRESH_TOKEN || !CLIENT_ID || !CLIENT_SECRET) {
+    if (!BLOG_ID || !API_KEY || !ACCESS_TOKEN) {
       console.error('❌ Missing required environment variables');
-      console.error('Required: BLOG_ID, API_KEY, REFRESH_TOKEN, CLIENT_ID, CLIENT_SECRET');
+      console.error('Required: BLOG_ID, API_KEY, ACCESS_TOKEN');
       process.exit(1);
     }
     
-    console.log('🔑 Generating access token from refresh token...');
-    try {
-      await refreshAccessToken();
-    } catch (error) {
-      console.error('❌ Failed to generate access token. Check your refresh token and credentials.');
-      return;
-    }
+    console.log('✅ All required environment variables found');
+    console.log(`📝 Blog ID: ${BLOG_ID}`);
     
     const matches = await fetchMatches('tomorrow');
     
     if (matches.length === 0) {
-      console.log('No matches found for tomorrow');
+      console.log('ℹ️  No matches found for tomorrow');
       return;
     }
     
     let createdCount = 0;
     for (const match of matches) {
-      console.log(`\nProcessing: ${match.homeTeam} vs ${match.awayTeam}`);
+      console.log(`\n⚽ Processing: ${match.homeTeam} vs ${match.awayTeam}`);
       const post = await createPost(match);
       if (post) {
         createdCount++;
@@ -398,19 +285,11 @@ async function createMatchPosts() {
       await new Promise(resolve => setTimeout(resolve, 3000));
     }
     
-    console.log(`\nFinished creating match posts. Created ${createdCount} new posts.`);
+    console.log(`\n🎉 Finished! Created ${createdCount} new posts.`);
   } catch (error) {
-    console.error('Error in createMatchPosts:', error);
+    console.error('❌ Error in createMatchPosts:', error);
+    process.exit(1);
   }
 }
 
-module.exports = {
-  createMatchPosts,
-  fetchMatches,
-  extractIframeFromMatch,
-  refreshAccessToken
-};
-
-if (require.main === module) {
-  createMatchPosts();
-}
+createMatchPosts();
