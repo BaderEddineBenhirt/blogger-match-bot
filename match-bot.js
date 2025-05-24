@@ -3,7 +3,7 @@ const cheerio = require('cheerio');
 
 const BLOG_ID = process.env.BLOG_ID;
 const API_KEY = process.env.API_KEY;
-let ACCESS_TOKEN = process.env.ACCESS_TOKEN;
+let ACCESS_TOKEN = null; 
 const REFRESH_TOKEN = process.env.REFRESH_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
@@ -44,12 +44,10 @@ async function makeAuthenticatedRequest(url, data, method = 'GET') {
     
     return await axios(config);
   } catch (error) {
-    // If token expired (401), refresh and retry
     if (error.response?.status === 401) {
       console.log('🔑 Token expired, refreshing...');
       await refreshAccessToken();
       
-      // Retry with new token
       const config = {
         method,
         url,
@@ -369,18 +367,17 @@ async function createMatchPosts() {
   try {
     console.log('Starting to create match posts...');
     
-    // Validate required environment variables
-    if (!BLOG_ID || !API_KEY || !ACCESS_TOKEN || !REFRESH_TOKEN || !CLIENT_ID || !CLIENT_SECRET) {
+    if (!BLOG_ID || !API_KEY || !REFRESH_TOKEN || !CLIENT_ID || !CLIENT_SECRET) {
       console.error('❌ Missing required environment variables');
-      console.error('Required: BLOG_ID, API_KEY, ACCESS_TOKEN, REFRESH_TOKEN, CLIENT_ID, CLIENT_SECRET');
+      console.error('Required: BLOG_ID, API_KEY, REFRESH_TOKEN, CLIENT_ID, CLIENT_SECRET');
       process.exit(1);
     }
     
-    // Test and refresh token if needed
+    console.log('🔑 Generating access token from refresh token...');
     try {
       await refreshAccessToken();
     } catch (error) {
-      console.error('❌ Failed to refresh token. Check your credentials.');
+      console.error('❌ Failed to generate access token. Check your refresh token and credentials.');
       return;
     }
     
@@ -398,7 +395,6 @@ async function createMatchPosts() {
       if (post) {
         createdCount++;
       }
-      // Wait between requests to avoid rate limiting
       await new Promise(resolve => setTimeout(resolve, 3000));
     }
     
@@ -408,7 +404,6 @@ async function createMatchPosts() {
   }
 }
 
-// Export functions for testing
 module.exports = {
   createMatchPosts,
   fetchMatches,
@@ -416,7 +411,6 @@ module.exports = {
   refreshAccessToken
 };
 
-// Run if called directly
 if (require.main === module) {
   createMatchPosts();
 }
