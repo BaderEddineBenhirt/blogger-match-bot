@@ -8,21 +8,20 @@ on:
 jobs:
   post-matches:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v2
-
+      
       - name: Set up Node.js
         uses: actions/setup-node@v2
         with:
           node-version: '18'
-
+          
       - name: Install dependencies
         run: npm install axios cheerio
-
+        
       - name: Install jq
         run: sudo apt-get install jq
-
+        
       - name: Generate Blogger Access Token
         id: generate_token
         run: |
@@ -31,21 +30,20 @@ jobs:
             -d client_secret="${{ secrets.CLIENT_SECRET }}" \
             -d refresh_token="${{ secrets.REFRESH_TOKEN }}" \
             -d grant_type=refresh_token)
-
           echo "OAuth response: $RESPONSE"
-
           ACCESS_TOKEN=$(echo "$RESPONSE" | jq -r '.access_token')
           if [[ "$ACCESS_TOKEN" == "null" || -z "$ACCESS_TOKEN" ]]; then
             echo "❌ Failed to generate access token."
             exit 1
           fi
           echo "ACCESS_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
-
+          
       - name: Run match posting script
         run: node match-bot.js
         env:
           BLOG_ID: ${{ secrets.BLOG_ID }}
           API_KEY: ${{ secrets.API_KEY }}
           ACCESS_TOKEN: ${{ env.ACCESS_TOKEN }}
-          CLIENT_SECRET: ${{ env.CLIENT_SECRET }}
-          CLIENT_ID: ${{ env.CLIENT_ID }}
+          REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
