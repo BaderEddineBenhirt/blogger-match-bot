@@ -44,6 +44,9 @@ async function fetchMatches(day = 'tomorrow') {
         const league = $(element).find('.MT_Info li:last-child span').text().trim();
         const broadcaster = $(element).find('.MT_Info li:first-child span').text().trim();
         
+        // Get the match link for iframe extraction
+        const matchLink = $(element).find('a').attr('href');
+        
         if (!homeTeam || !awayTeam) {
           console.log(`Skipping match #${index} - missing team data`);
           return;
@@ -58,7 +61,8 @@ async function fetchMatches(day = 'tomorrow') {
           time: time || 'TBD',
           league: league || 'Football Match',
           broadcaster: broadcaster || 'TBD',
-          date: day
+          date: day,
+          matchLink: matchLink ? `https://www.kooraliive.com${matchLink}` : null
         };
         
         matches.push(match);
@@ -72,6 +76,101 @@ async function fetchMatches(day = 'tomorrow') {
   } catch (error) {
     console.error('Error fetching matches:', error);
     return [];
+  }
+}
+
+async function extractIframeFromMatch(matchUrl) {
+  try {
+    if (!matchUrl) {
+      console.log('No match URL provided');
+      return null;
+    }
+    
+    console.log(`Extracting iframe from: ${matchUrl}`);
+    
+    const corsProxy = 'https://api.allorigins.win/raw?url=';
+    const response = await axios.get(corsProxy + encodeURIComponent(matchUrl), {
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+    
+    const $ = cheerio.load(response.data);
+    
+    // Look for various iframe patterns commonly used for video streaming
+    let iframe = null;
+    
+    // Try different selectors for iframes
+    const iframeSelectors = [
+      'iframe[src*="youtube"]',
+      'iframe[src*="twitch"]',
+      'iframe[src*="stream"]',
+      'iframe[src*="player"]',
+      'iframe[src*="embed"]',
+      '.video-player iframe',
+      '.player-container iframe',
+      '#player iframe',
+      '.stream-player iframe',
+      'iframe'
+    ];
+    
+    for (const selector of iframeSelectors) {
+      const foundIframe = $(selector).first();
+      if (foundIframe.length > 0) {
+        const src = foundIframe.attr('src');
+        if (src && !src.includes('ads') && !src.includes('advertisement')) {
+          iframe = {
+            src: src.startsWith('//') ? `https:${src}` : src,
+            width: foundIframe.attr('width') || '100%',
+            height: foundIframe.attr('height') || '400',
+            allowfullscreen: foundIframe.attr('allowfullscreen') !== undefined,
+            frameborder: foundIframe.attr('frameborder') || '0'
+          };
+          console.log(`Found iframe: ${iframe.src}`);
+          break;
+        }
+      }
+    }
+    
+    // If no iframe found, look for video tags or embedded players
+    if (!iframe) {
+      // Look for video elements
+      const video = $('video source').first();
+      if (video.length > 0) {
+        const src = video.attr('src');
+        if (src) {
+          iframe = {
+            src: src.startsWith('//') ? `https:${src}` : src,
+            width: '100%',
+            height: '400',
+            isVideo: true
+          };
+          console.log(`Found video source: ${iframe.src}`);
+        }
+      }
+    }
+    
+    // Look for embedded player scripts or data attributes
+    if (!iframe) {
+      const playerData = $('[data-player]').first();
+      if (playerData.length > 0) {
+        const playerUrl = playerData.attr('data-player');
+        if (playerUrl) {
+          iframe = {
+            src: playerUrl.startsWith('//') ? `https:${playerUrl}` : playerUrl,
+            width: '100%',
+            height: '400'
+          };
+          console.log(`Found player data: ${iframe.src}`);
+        }
+      }
+    }
+    
+    return iframe;
+  } catch (error) {
+    console.error('Error extracting iframe:', error.message);
+    return null;
   }
 }
 
@@ -101,6 +200,11 @@ async function createPost(match) {
       return null;
     }
     
+    console.log(`Creating post for: ${title}`);
+    
+    // Extract iframe from the match page
+    const iframeData = await extractIframeFromMatch(match.matchLink);
+    
     const slugify = text => text
       .toString()
       .toLowerCase()
@@ -113,12 +217,50 @@ async function createPost(match) {
     
     const slug = `${slugify(match.homeTeam)}-vs-${slugify(match.awayTeam)}`;
     
+    // Build the player section based on whether we found an iframe
+    let playerSection;
+    if (iframeData) {
+      if (iframeData.isVideo) {
+        playerSection = `
+          <div id="match-player">
+            <div class="player-container">
+              <video controls width="${iframeData.width}" height="${iframeData.height}">
+                <source src="${iframeData.src}" type="video/mp4">
+                Your browser does not support the video tag.
+              </video>
+            </div>
+          </div>`;
+      } else {
+        playerSection = `
+          <div id="match-player">
+            <div class="player-container">
+              <iframe 
+                src="${iframeData.src}" 
+                width="${iframeData.width}" 
+                height="${iframeData.height}"
+                frameborder="${iframeData.frameborder}"
+                ${iframeData.allowfullscreen ? 'allowfullscreen' : ''}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
+              </iframe>
+            </div>
+          </div>`;
+      }
+    } else {
+      playerSection = `
+        <div id="match-player">
+          <div class="player-container">
+            <p>سيتم إضافة بث المباراة قبل موعد المباراة</p>
+            ${match.matchLink ? `<p><a href="${match.matchLink}" target="_blank">رابط المباراة</a></p>` : ''}
+          </div>
+        </div>`;
+    }
+    
     const content = `
       <div class="match-details">
         <h2>${match.league}</h2>
         <div class="teams">
           <div class="team home">
-            <img src="${match.homeTeamLogo}" alt="${match.homeTeam}">
+            ${match.homeTeamLogo ? `<img src="${match.homeTeamLogo}" alt="${match.homeTeam}">` : ''}
             <h3>${match.homeTeam}</h3>
           </div>
           <div class="match-time">
@@ -126,18 +268,14 @@ async function createPost(match) {
             <p>${match.date === 'today' ? 'اليوم' : match.date === 'tomorrow' ? 'غداً' : 'أمس'}</p>
           </div>
           <div class="team away">
-            <img src="${match.awayTeamLogo}" alt="${match.awayTeam}">
+            ${match.awayTeamLogo ? `<img src="${match.awayTeamLogo}" alt="${match.awayTeam}">` : ''}
             <h3>${match.awayTeam}</h3>
           </div>
         </div>
         <div class="match-info">
           <p>📺 ${match.broadcaster}</p>
         </div>
-        <div id="match-player">
-          <div class="player-container">
-            <p>سيتم إضافة بث المباراة قبل موعد المباراة</p>
-          </div>
-        </div>
+        ${playerSection}
       </div>
     `;
     
@@ -147,15 +285,13 @@ async function createPost(match) {
       kind: 'blogger#post',
       blog: { id: BLOG_ID },
       title: title,
-      content: content,
-      url: `https://badertalks.blogspot.com/${new Date().getFullYear()}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}/${slug}.html`
-    },
-      {
-        headers: {
-          Authorization: `Bearer ${ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      content: content
+    }, {
+      headers: {
+        Authorization: `Bearer ${ACCESS_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
     
     console.log(`Post created: ${response.data.url}`);
     return response.data;
@@ -174,19 +310,36 @@ async function createMatchPosts() {
     
     const matches = await fetchMatches('tomorrow');
     
+    if (matches.length === 0) {
+      console.log('No matches found for tomorrow');
+      return;
+    }
+    
     let createdCount = 0;
     for (const match of matches) {
+      console.log(`\nProcessing: ${match.homeTeam} vs ${match.awayTeam}`);
       const post = await createPost(match);
       if (post) {
         createdCount++;
       }
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Wait between requests to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 3000));
     }
     
-    console.log(`Finished creating match posts. Created ${createdCount} new posts.`);
+    console.log(`\nFinished creating match posts. Created ${createdCount} new posts.`);
   } catch (error) {
     console.error('Error in createMatchPosts:', error);
   }
 }
 
-createMatchPosts();
+// Export functions for testing
+module.exports = {
+  createMatchPosts,
+  fetchMatches,
+  extractIframeFromMatch
+};
+
+// Run if called directly
+if (require.main === module) {
+  createMatchPosts();
+}
