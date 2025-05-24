@@ -22,7 +22,7 @@ async function makeAuthenticatedRequest(url, data, method = 'GET') {
   return await axios(config);
 }
 
-async function fetchMatches(day = 'today') {
+async function fetchMatches(day = 'tomorrow') {
   try {
     let url;
     if (day === 'yesterday') {
@@ -61,7 +61,7 @@ async function fetchMatches(day = 'today') {
         const league = $(element).find('.MT_Info li:last-child span').text().trim();
         const broadcaster = $(element).find('.MT_Info li:first-child span').text().trim();
         
-        const matchLinkElement = $(element).find('a[href*="/matches/"]');
+        const matchLinkElement = $(element).find('a');
         let matchLink = null;
         
         if (matchLinkElement.length > 0) {
@@ -75,21 +75,6 @@ async function fetchMatches(day = 'today') {
               matchLink = `https://www.kooraliive.com/${href}`;
             }
             console.log(`Found match link: ${matchLink}`);
-          }
-        } else {
-          const anyLink = $(element).find('a').first();
-          if (anyLink.length > 0) {
-            let href = anyLink.attr('href');
-            if (href && href.includes('/matches/')) {
-              if (href.startsWith('http')) {
-                matchLink = href;
-              } else if (href.startsWith('/')) {
-                matchLink = `https://www.kooraliive.com${href}`;
-              } else {
-                matchLink = `https://www.kooraliive.com/${href}`;
-              }
-              console.log(`Found fallback match link: ${matchLink}`);
-            }
           }
         }
         
@@ -356,10 +341,10 @@ async function createMatchPosts() {
     console.log('✅ All required environment variables found');
     console.log(`📝 Blog ID: ${BLOG_ID}`);
     
-    const matches = await fetchMatches('today');
+    const matches = await fetchMatches('tomorrow');
     
     if (matches.length === 0) {
-      console.log('ℹ️  No matches found for today');
+      console.log('ℹ️  No matches found for tomorrow');
       return;
     }
     
