@@ -3,7 +3,71 @@ const cheerio = require('cheerio');
 
 const BLOG_ID = process.env.BLOG_ID;
 const API_KEY = process.env.API_KEY;
-const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
+let ACCESS_TOKEN = process.env.ACCESS_TOKEN;
+const REFRESH_TOKEN = process.env.REFRESH_TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
+
+async function refreshAccessToken() {
+  try {
+    console.log('🔄 Refreshing access token...');
+    const response = await axios.post('https://oauth2.googleapis.com/token', {
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      refresh_token: REFRESH_TOKEN,
+      grant_type: 'refresh_token'
+    });
+    
+    ACCESS_TOKEN = response.data.access_token;
+    console.log('✅ Access token refreshed successfully');
+    return ACCESS_TOKEN;
+  } catch (error) {
+    console.error('❌ Error refreshing access token:', error.response?.data || error.message);
+    throw error;
+  }
+}
+
+async function makeAuthenticatedRequest(url, data, method = 'GET') {
+  try {
+    const config = {
+      method,
+      url,
+      headers: {
+        Authorization: `Bearer ${ACCESS_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    };
+    
+    if (data && method !== 'GET') {
+      config.data = data;
+    }
+    
+    return await axios(config);
+  } catch (error) {
+    // If token expired (401), refresh and retry
+    if (error.response?.status === 401) {
+      console.log('🔑 Token expired, refreshing...');
+      await refreshAccessToken();
+      
+      // Retry with new token
+      const config = {
+        method,
+        url,
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      };
+      
+      if (data && method !== 'GET') {
+        config.data = data;
+      }
+      
+      return await axios(config);
+    }
+    throw error;
+  }
+}
 
 async function fetchMatches(day = 'tomorrow') {
   try {
@@ -281,17 +345,14 @@ async function createPost(match) {
     
     const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/`;
     
-    const response = await axios.post(url, {
+    const postData = {
       kind: 'blogger#post',
       blog: { id: BLOG_ID },
       title: title,
       content: content
-    }, {
-      headers: {
-        Authorization: `Bearer ${ACCESS_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    };
+    
+    const response = await makeAuthenticatedRequest(url, postData, 'POST');
     
     console.log(`Post created: ${response.data.url}`);
     return response.data;
@@ -307,6 +368,21 @@ async function createPost(match) {
 async function createMatchPosts() {
   try {
     console.log('Starting to create match posts...');
+    
+    // Validate required environment variables
+    if (!BLOG_ID || !API_KEY || !ACCESS_TOKEN || !REFRESH_TOKEN || !CLIENT_ID || !CLIENT_SECRET) {
+      console.error('❌ Missing required environment variables');
+      console.error('Required: BLOG_ID, API_KEY, ACCESS_TOKEN, REFRESH_TOKEN, CLIENT_ID, CLIENT_SECRET');
+      process.exit(1);
+    }
+    
+    // Test and refresh token if needed
+    try {
+      await refreshAccessToken();
+    } catch (error) {
+      console.error('❌ Failed to refresh token. Check your credentials.');
+      return;
+    }
     
     const matches = await fetchMatches('tomorrow');
     
@@ -336,7 +412,8 @@ async function createMatchPosts() {
 module.exports = {
   createMatchPosts,
   fetchMatches,
-  extractIframeFromMatch
+  extractIframeFromMatch,
+  refreshAccessToken
 };
 
 // Run if called directly
