@@ -356,10 +356,10 @@ async function createMatchPosts() {
     console.log('✅ All required environment variables found');
     console.log(`📝 Blog ID: ${BLOG_ID}`);
     
-    const matches = await fetchMatches('tomorrow');
+    const matches = await fetchMatches('today');
     
     if (matches.length === 0) {
-      console.log('ℹ️  No matches found for tomorrow');
+      console.log('ℹ️  No matches found for today');
       return;
     }
     
