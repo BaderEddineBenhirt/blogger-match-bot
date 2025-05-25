@@ -267,7 +267,6 @@ async function storeUrlMapping(match, actualUrl, publishedDate) {
 function cleanIframeContent(iframeData) {
   if (!iframeData) return null;
   
-  // Create clean iframe HTML without telegram circle and other unwanted elements
   return `
     <div class="albaplayer_server-body">
       <div class="video-con embed-responsive">
@@ -305,34 +304,89 @@ function cleanIframeContent(iframeData) {
       </div>
     </div>
     <style>
-      /* Hide telegram circle and any popup messages */
-      #tme, 
+      #tme,
       #tme_message,
       .telegram-popup,
       .telegram-widget,
-      [id*="telegram"],
-      [class*="telegram"],
       .subscription-popup,
-      .social-popup {
+      .social-popup,
+      div[id*="telegram"],
+      div[class*="telegram"],
+      div[onclick*="telegram"],
+      svg[viewBox="0 0 33 33"],
+      .clossalert,
+      div[style*="position: fixed"][style*="bottom: 50px"],
+      div[style*="position: fixed"][style*="right: 25px"],
+      div[style*="position: fixed"][style*="border-radius: 50%"],
+      div[style*="background-color: #0088cc"],
+      div[style*="cursor: pointer"][style*="border-radius: 50%"],
+      [style*="bottom: 62px"][style*="right: -10px"],
+      [style*="width: 250px"][style*="background: white"] {
         display: none !important;
         visibility: hidden !important;
         opacity: 0 !important;
         pointer-events: none !important;
-      }
-      
-      /* Ensure clean player interface */
-      .albaplayer_server-body {
-        position: relative !important;
+        position: absolute !important;
+        left: -9999px !important;
+        top: -9999px !important;
+        z-index: -9999 !important;
+        width: 0 !important;
+        height: 0 !important;
         overflow: hidden !important;
       }
       
-      /* Remove any floating elements */
-      div[style*="position: fixed"],
-      div[style*="position: absolute"][style*="bottom"],
-      div[style*="position: absolute"][style*="right"] {
+      div:contains("اشترك في موقعنا مجانا"),
+      div:contains("خدمة الكورة لايف المجانية"),
+      div:contains("اضغط للاشتراك"),
+      p:contains("مباشر بدون تقطيع على التليجرام"),
+      strong:contains("اشترك في موقعنا مجانا") {
         display: none !important;
       }
-    </style>`;
+      
+      div[style*="width: 48px"][style*="height: 48px"][style*="border-radius: 50%"],
+      div[style*="position: fixed"][style*="z-index: 99999999"] {
+        display: none !important;
+      }
+      
+      .albaplayer_server-body {
+        position: relative !important;
+        overflow: hidden !important;
+        background: #000 !important;
+      }
+      
+      .video-con.embed-responsive {
+        width: 100% !important;
+        height: 100% !important;
+        position: relative !important;
+      }
+      
+      .cf {
+        width: 100% !important;
+        height: 100% !important;
+        border: none !important;
+      }
+    </style>
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        const telegramElements = document.querySelectorAll('#tme, #tme_message, [id*="telegram"], [class*="telegram"]');
+        telegramElements.forEach(el => el.remove());
+        
+        const popups = document.querySelectorAll('div[style*="position: fixed"], div[style*="z-index: 99999"]');
+        popups.forEach(popup => {
+          if (popup.innerHTML.includes('اشترك') || popup.innerHTML.includes('telegram') || popup.innerHTML.includes('التليجرام')) {
+            popup.remove();
+          }
+        });
+        
+        const circles = document.querySelectorAll('div[style*="border-radius: 50%"][style*="position: fixed"]');
+        circles.forEach(circle => circle.remove());
+      });
+      
+      setInterval(function() {
+        const unwanted = document.querySelectorAll('#tme, #tme_message, [style*="bottom: 50px"][style*="position: fixed"]');
+        unwanted.forEach(el => el.remove());
+      }, 1000);
+    </script>`;
 }
 
 async function createPost(match) {
