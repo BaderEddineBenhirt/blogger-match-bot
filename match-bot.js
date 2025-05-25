@@ -122,7 +122,86 @@ async function fetchMatches(day = 'today') {
             } else {
               matchLink = `https://www.kooraliive.com/${href}`;
             }
-            console.log(`Found match link: ${matchLink}`);
+            console.log(`✅ Post created after retry: ${retryResponse.data.url}`);
+          return retryResponse.data;
+        } catch (retryError) {
+          console.log(`❌ Still rate limited after 5 minutes, skipping: ${match.homeTeam} vs ${match.awayTeam}`);
+          return { skipped: true, reason: 'rate_limit' };
+        }
+      }
+    }
+    
+    console.error('❌ Error creating post:', error.response?.data || error.message);
+    return null;
+  }
+}
+
+async function createMatchPosts() {
+  try {
+    console.log('🚀 Starting to create match posts with filtering...');
+    
+    if (!BLOG_ID || !API_KEY || !ACCESS_TOKEN) {
+      console.error('❌ Missing required environment variables');
+      console.error('Required: BLOG_ID, API_KEY, ACCESS_TOKEN');
+      process.exit(1);
+    }
+    
+    console.log('✅ All required environment variables found');
+    console.log(`📝 Blog ID: ${BLOG_ID}`);
+    
+    const todayMatches = await fetchMatches('today');
+    
+    console.log(`\n📊 Match Summary:`);
+    console.log(`   Today: ${todayMatches.length} matches`);
+    
+    const filteredTodayMatches = filterTodayMatches(todayMatches);
+    console.log(`\n🔍 After filtering - Today's current/future matches: ${filteredTodayMatches.length}`);
+    
+    if (filteredTodayMatches.length === 0) {
+      console.log('ℹ️  No current or future matches found for today');
+      return;
+    }
+    
+    let createdCount = 0;
+    let skippedCount = 0;
+    let existingCount = 0;
+    
+    console.log('\n⚽ Processing today\'s current and future matches...');
+    for (const match of filteredTodayMatches) {
+      console.log(`\n⚽ Processing: ${match.homeTeam} vs ${match.awayTeam} at ${match.time}`);
+      const post = await createPost(match);
+      
+      if (post && post.skipped) {
+        skippedCount++;
+      } else if (post && post.existing) {
+        existingCount++;
+      } else if (post) {
+        createdCount++;
+      }
+      
+      if (createdCount > 0) {
+        console.log('⏳ Waiting 30 seconds to respect Blogger rate limits...');
+        await new Promise(resolve => setTimeout(resolve, 30000));
+      } else {
+        console.log('⏳ Waiting 5 seconds before next attempt...');
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    }
+    
+    console.log(`\n🎉 Processing Complete!`);
+    console.log(`   ✅ Created ${createdCount} new match posts`);
+    console.log(`   📋 Registered ${existingCount} existing posts`);
+    console.log(`   ⏸️  Skipped ${skippedCount} due to rate limits`);
+    console.log(`   📊 Total processed: ${createdCount + existingCount + skippedCount}`);
+    console.log(`   📝 All current/future posts are now tracked in match-urls.json`);
+    
+  } catch (error) {
+    console.error('❌ Error in createMatchPosts:', error);
+    process.exit(1);
+  }
+}
+
+createMatchPosts();.log(`Found match link: ${matchLink}`);
           }
         }
         
@@ -411,7 +490,37 @@ async function createPost(match) {
     
     const exists = await checkPostExists(title);
     if (exists) {
-      return null;
+      console.log(`Post already exists: ${title}`);
+      
+      if (match.date === 'today' && isMatchCurrentOrFuture(match.time)) {
+        try {
+          const searchUrl = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/search?q=${encodeURIComponent(title)}&key=${API_KEY}`;
+          const response = await axios.get(searchUrl);
+          
+          if (response.data.items && response.data.items.length > 0) {
+            const existingPost = response.data.items[0];
+            
+            const postDate = existingPost.published.split('T')[0];
+            const today = new Date().toISOString().split('T')[0];
+            
+            if (postDate === today) {
+              await storeUrlMapping(match, existingPost.url, existingPost.published);
+              console.log(`📝 Registered existing current/future post: ${title}`);
+              return { existing: true, title: title };
+            } else {
+              console.log(`⏰ Existing post is from ${postDate}, not today (${today}) - skipping registration`);
+              return { existing: false, reason: 'old_date' };
+            }
+          }
+        } catch (error) {
+          console.error('Error registering existing post:', error);
+        }
+      } else {
+        console.log(`⏰ Existing post is not current/future today - skipping registration`);
+        return { existing: false, reason: 'not_current_future' };
+      }
+      
+      return { existing: false, reason: 'not_tracked' };
     }
     
     console.log(`Creating post for: ${title}`);
@@ -483,7 +592,7 @@ async function createPost(match) {
           </div>
         </div>
         
-        <div class="match-info" style="margin: clamp(15px, 4vw, 25px) 0; padding: clamp(15px, 4vw, 25px); width:100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: clamp(12px, 3vw, 18px); box-shadow: 0 clamp(4px, 1.5vw, 8px) clamp(10px, 3vw, 20px) rgba(102, 126, 234, 0.3); position: relative; overflow: hidden;">
+        <div class="match-info" style="margin: clamp(15px, 4vw, 25px) 0; padding: clamp(15px, 4vw, 25px); background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: clamp(12px, 3vw, 18px); box-shadow: 0 clamp(4px, 1.5vw, 8px) clamp(10px, 3vw, 20px) rgba(102, 126, 234, 0.3); position: relative; overflow: hidden;">
           <div style="position: absolute; top: -50%; right: -50%; width: 100%; height: 100%; background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%); pointer-events: none;"></div>
           <div style="position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: clamp(8px, 2vw, 12px); flex-wrap: wrap;">
             <div style="background: rgba(255,255,255,0.15); padding: clamp(8px, 2vw, 12px); border-radius: 50%; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2);">
@@ -535,78 +644,4 @@ async function createPost(match) {
         try {
           const retryResponse = await makeAuthenticatedRequest(url, postData, 'POST');
           await storeUrlMapping(match, retryResponse.data.url, retryResponse.data.published);
-          console.log(`✅ Post created after retry: ${retryResponse.data.url}`);
-          return retryResponse.data;
-        } catch (retryError) {
-          console.log(`❌ Still rate limited after 5 minutes, skipping: ${match.homeTeam} vs ${match.awayTeam}`);
-          return { skipped: true, reason: 'rate_limit' };
-        }
-      }
-    }
-    
-    console.error('❌ Error creating post:', error.response?.data || error.message);
-    return null;
-  }
-}
-
-async function createMatchPosts() {
-  try {
-    console.log('🚀 Starting to create match posts with filtering...');
-    
-    if (!BLOG_ID || !API_KEY || !ACCESS_TOKEN) {
-      console.error('❌ Missing required environment variables');
-      console.error('Required: BLOG_ID, API_KEY, ACCESS_TOKEN');
-      process.exit(1);
-    }
-    
-    console.log('✅ All required environment variables found');
-    console.log(`📝 Blog ID: ${BLOG_ID}`);
-    
-    const todayMatches = await fetchMatches('today');
-    
-    console.log(`\n📊 Match Summary:`);
-    console.log(`   Today: ${todayMatches.length} matches`);
-    
-    const filteredTodayMatches = filterTodayMatches(todayMatches);
-    console.log(`\n🔍 After filtering - Today's current/future matches: ${filteredTodayMatches.length}`);
-    
-    if (filteredTodayMatches.length === 0) {
-      console.log('ℹ️  No current or future matches found for today');
-      return;
-    }
-    
-    let createdCount = 0;
-    let skippedCount = 0;
-    
-    console.log('\n⚽ Processing today\'s current and future matches...');
-    for (const match of filteredTodayMatches) {
-      console.log(`\n⚽ Processing: ${match.homeTeam} vs ${match.awayTeam} at ${match.time}`);
-      const post = await createPost(match);
-      
-      if (post && post.skipped) {
-        skippedCount++;
-      } else if (post) {
-        createdCount++;
-      }
-      
-      if (createdCount > 0) {
-        console.log('⏳ Waiting 30 seconds to respect Blogger rate limits...');
-        await new Promise(resolve => setTimeout(resolve, 30000));
-      } else {
-        console.log('⏳ Waiting 5 seconds before next attempt...');
-        await new Promise(resolve => setTimeout(resolve, 5000));
-      }
-    }
-    
-    console.log(`\n🎉 Processing Complete!`);
-    console.log(`   ✅ Created ${createdCount} new match posts (current/future)`);
-    console.log(`   ⏸️  Skipped ${skippedCount} due to rate limits`);
-    console.log(`   📊 Total processed: ${createdCount + skippedCount}`);
-    
-  } catch (error) {
-    console.error('❌ Error in createMatchPosts:', error);
-    process.exit(1);
-  }
-}
-
-createMatchPosts();
+          console
