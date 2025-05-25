@@ -483,7 +483,7 @@ async function createPost(match) {
           </div>
         </div>
         
-        <div class="match-info" style="margin: clamp(15px, 4vw, 25px) 0; padding: clamp(15px, 4vw, 25px); background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: clamp(12px, 3vw, 18px); box-shadow: 0 clamp(4px, 1.5vw, 8px) clamp(10px, 3vw, 20px) rgba(102, 126, 234, 0.3); position: relative; overflow: hidden;">
+        <div class="match-info" style="margin: clamp(15px, 4vw, 25px) 0; padding: clamp(15px, 4vw, 25px); width:100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: clamp(12px, 3vw, 18px); box-shadow: 0 clamp(4px, 1.5vw, 8px) clamp(10px, 3vw, 20px) rgba(102, 126, 234, 0.3); position: relative; overflow: hidden;">
           <div style="position: absolute; top: -50%; right: -50%; width: 100%; height: 100%; background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%); pointer-events: none;"></div>
           <div style="position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: clamp(8px, 2vw, 12px); flex-wrap: wrap;">
             <div style="background: rgba(255,255,255,0.15); padding: clamp(8px, 2vw, 12px); border-radius: 50%; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2);">
