@@ -362,8 +362,6 @@ async function createPost(match) {
         <div id="match-player" style="text-align: center; margin: 20px 0; padding: 20px; background: linear-gradient(135deg, #ff7e5f 0%, #feb47b 100%); border-radius: 15px; box-shadow: 0 6px 12px rgba(0,0,0,0.15);">
           <div class="player-container">
             <h3 style="color: #fff; margin-bottom: 15px; font-size: clamp(18px, 4vw, 20px); text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">⏰ بث المباراة قريباً</h3>
-            <p style="margin: 15px 0; color: #fff; font-size: clamp(14px, 3vw, 16px); text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">سيتم إضافة بث المباراة قبل موعد المباراة</p>
-            ${match.matchLink ? `<p style="margin: 15px 0;"><a href="${match.matchLink}" target="_blank" rel="noopener" style="display: inline-block; padding: 12px 20px; background: #fff; color: #ff7e5f; text-decoration: none; border-radius: 25px; font-weight: bold; box-shadow: 0 3px 6px rgba(0,0,0,0.2); transition: transform 0.2s; text-shadow: none; font-size: clamp(12px, 3vw, 14px);">🔗 رابط المباراة الأصلي</a></p>` : ''}
           </div>
         </div>`;
     }
