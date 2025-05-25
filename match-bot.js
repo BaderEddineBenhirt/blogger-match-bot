@@ -305,99 +305,34 @@ function cleanIframeContent(iframeData) {
       </div>
     </div>
     <style>
-      /* Aggressively hide telegram and popup elements */
-      #tme,
+      /* Hide telegram circle and any popup messages */
+      #tme, 
       #tme_message,
       .telegram-popup,
       .telegram-widget,
+      [id*="telegram"],
+      [class*="telegram"],
       .subscription-popup,
-      .social-popup,
-      div[id*="telegram"],
-      div[class*="telegram"],
-      div[onclick*="telegram"],
-      svg[viewBox="0 0 33 33"],
-      .clossalert,
-      div[style*="position: fixed"][style*="bottom: 50px"],
-      div[style*="position: fixed"][style*="right: 25px"],
-      div[style*="position: fixed"][style*="border-radius: 50%"],
-      div[style*="background-color: #0088cc"],
-      div[style*="cursor: pointer"][style*="border-radius: 50%"],
-      [style*="bottom: 62px"][style*="right: -10px"],
-      [style*="width: 250px"][style*="background: white"] {
+      .social-popup {
         display: none !important;
         visibility: hidden !important;
         opacity: 0 !important;
         pointer-events: none !important;
-        position: absolute !important;
-        left: -9999px !important;
-        top: -9999px !important;
-        z-index: -9999 !important;
-        width: 0 !important;
-        height: 0 !important;
-        overflow: hidden !important;
       }
       
-      /* Hide subscription messages */
-      div:contains("اشترك في موقعنا مجانا"),
-      div:contains("خدمة الكورة لايف المجانية"),
-      div:contains("اضغط للاشتراك"),
-      p:contains("مباشر بدون تقطيع على التليجرام"),
-      strong:contains("اشترك في موقعنا مجانا") {
-        display: none !important;
-      }
-      
-      /* Remove any floating circular elements */
-      div[style*="width: 48px"][style*="height: 48px"][style*="border-radius: 50%"],
-      div[style*="position: fixed"][style*="z-index: 99999999"] {
-        display: none !important;
-      }
-      
-      /* Clean player interface */
+      /* Ensure clean player interface */
       .albaplayer_server-body {
         position: relative !important;
         overflow: hidden !important;
-        background: #000 !important;
       }
       
-      /* Ensure iframe fills properly */
-      .video-con.embed-responsive {
-        width: 100% !important;
-        height: 100% !important;
-        position: relative !important;
+      /* Remove any floating elements */
+      div[style*="position: fixed"],
+      div[style*="position: absolute"][style*="bottom"],
+      div[style*="position: absolute"][style*="right"] {
+        display: none !important;
       }
-      
-      .cf {
-        width: 100% !important;
-        height: 100% !important;
-        border: none !important;
-      }
-    </style>
-    <script>
-      // JavaScript to remove telegram elements after page load
-      document.addEventListener('DOMContentLoaded', function() {
-        // Remove telegram elements
-        const telegramElements = document.querySelectorAll('#tme, #tme_message, [id*="telegram"], [class*="telegram"]');
-        telegramElements.forEach(el => el.remove());
-        
-        // Remove subscription popups
-        const popups = document.querySelectorAll('div[style*="position: fixed"], div[style*="z-index: 99999"]');
-        popups.forEach(popup => {
-          if (popup.innerHTML.includes('اشترك') || popup.innerHTML.includes('telegram') || popup.innerHTML.includes('التليجرام')) {
-            popup.remove();
-          }
-        });
-        
-        // Remove circular floating elements
-        const circles = document.querySelectorAll('div[style*="border-radius: 50%"][style*="position: fixed"]');
-        circles.forEach(circle => circle.remove());
-      });
-      
-      // Continuous monitoring to remove telegram elements
-      setInterval(function() {
-        const unwanted = document.querySelectorAll('#tme, #tme_message, [style*="bottom: 50px"][style*="position: fixed"]');
-        unwanted.forEach(el => el.remove());
-      }, 1000);
-    </script>`;
+    </style>`;
 }
 
 async function createPost(match) {
