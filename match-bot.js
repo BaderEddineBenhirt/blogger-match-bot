@@ -264,6 +264,47 @@ async function storeUrlMapping(match, actualUrl, publishedDate) {
   }
 }
 
+function cleanIframeContent(iframeData) {
+  if (!iframeData) return null;
+  
+  return `
+    <div class="albaplayer_server-body">
+      <div class="video-con embed-responsive">
+        <iframe allowfullscreen="${iframeData.allowfullscreen}" 
+                class="cf" 
+                frameborder="${iframeData.frameborder}" 
+                height="${iframeData.height}" 
+                name="search_iframe" 
+                rel="nofollow" 
+                sandbox="allow-forms allow-same-origin allow-scripts" 
+                scrolling="no" 
+                src="${iframeData.src}" 
+                width="${iframeData.width}">
+        </iframe>
+      </div>
+      <div class="albaplayer_videos_channel">
+        <a class="button refresh" href="javascript:window.location.reload()">تحديث</a>
+        <div id="showshare" style="display: block;" title="مشاركة">
+          <span href="javascript:void(0)" onclick="document.getElementById('showother').style.display='block';document.getElementById('showshare').style.display='none'">
+            <div class="button share">مشاركة</div>
+          </span>
+        </div>
+        <div class="showother" id="showother" style="display: none;">
+          <span href="javascript:void(0)" onclick="document.getElementById('showother').style.display='none';document.getElementById('showshare').style.display='block'" title="اغلاق">
+            <div class="button close">اغلاق</div>
+          </span>
+          <div id="albaplayer_share_channel">
+            <div class="share-channel">
+              <div class="albaplayer_share_title">كود التضمين</div>
+              <textarea id="albaplayer_player_share" onclick="this.select();" onfocus="this.select();">&lt;iframe allowfullscreen='true' frameborder='0' height='500px' scrolling='1' src='${iframeData.src}' width='100%'&gt;&lt;/iframe&gt;</textarea>
+              <button class="custom-btn" onclick="document.querySelector('#albaplayer_player_share').select();document.execCommand('copy');">انقر للنسخ</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
 async function createPost(match) {
   try {
     const title = `${match.homeTeam} vs ${match.awayTeam} - ${match.league}`;
@@ -279,56 +320,80 @@ async function createPost(match) {
     
     let playerSection;
     if (iframeData) {
+      const cleanContent = cleanIframeContent(iframeData);
       playerSection = `
-        <div id="match-player" style="text-align: center; margin: 30px 0; padding: 25px; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); border-radius: 15px; box-shadow: 0 6px 12px rgba(0,0,0,0.3);">
-          <h3 style="color: #fff; margin-bottom: 20px; font-size: 22px; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">🎥 مشاهدة المباراة مباشرة</h3>
-          <p><iframe allowfullscreen='${iframeData.allowfullscreen}' frameborder='${iframeData.frameborder}' height='${iframeData.height}' scrolling='${iframeData.scrolling}' src='${iframeData.src}' width='${iframeData.width}'></iframe></p>
+        <div id="match-player" style="text-align: center; margin: 20px 0; padding: 20px; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); border-radius: 15px; box-shadow: 0 6px 12px rgba(0,0,0,0.3);">
+          <h3 style="color: #fff; margin-bottom: 15px; font-size: clamp(18px, 4vw, 22px); text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">🎥 مشاهدة المباراة مباشرة</h3>
+          ${cleanContent}
           <p style="margin-top: 15px; color: #ccc; font-size: 14px;">اضغط على زر التشغيل لبدء المشاهدة</p>
         </div>`;
     } else {
       playerSection = `
-        <div id="match-player" style="text-align: center; margin: 30px 0; padding: 30px; background: linear-gradient(135deg, #ff7e5f 0%, #feb47b 100%); border-radius: 15px; box-shadow: 0 6px 12px rgba(0,0,0,0.15);">
+        <div id="match-player" style="text-align: center; margin: 20px 0; padding: 20px; background: linear-gradient(135deg, #ff7e5f 0%, #feb47b 100%); border-radius: 15px; box-shadow: 0 6px 12px rgba(0,0,0,0.15);">
           <div class="player-container">
-            <h3 style="color: #fff; margin-bottom: 15px; font-size: 20px; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">⏰ بث المباراة قريباً</h3>
-            <p style="margin: 15px 0; color: #fff; font-size: 16px; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">سيتم إضافة بث المباراة قبل موعد المباراة</p>
-            ${match.matchLink ? `<p style="margin: 15px 0;"><a href="${match.matchLink}" target="_blank" rel="noopener" style="display: inline-block; padding: 12px 25px; background: #fff; color: #ff7e5f; text-decoration: none; border-radius: 25px; font-weight: bold; box-shadow: 0 3px 6px rgba(0,0,0,0.2); transition: transform 0.2s; text-shadow: none;">🔗 رابط المباراة الأصلي</a></p>` : ''}
+            <h3 style="color: #fff; margin-bottom: 15px; font-size: clamp(18px, 4vw, 20px); text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">⏰ بث المباراة قريباً</h3>
+            <p style="margin: 15px 0; color: #fff; font-size: clamp(14px, 3vw, 16px); text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">سيتم إضافة بث المباراة قبل موعد المباراة</p>
+            ${match.matchLink ? `<p style="margin: 15px 0;"><a href="${match.matchLink}" target="_blank" rel="noopener" style="display: inline-block; padding: 12px 20px; background: #fff; color: #ff7e5f; text-decoration: none; border-radius: 25px; font-weight: bold; box-shadow: 0 3px 6px rgba(0,0,0,0.2); transition: transform 0.2s; text-shadow: none; font-size: clamp(12px, 3vw, 14px);">🔗 رابط المباراة الأصلي</a></p>` : ''}
           </div>
         </div>`;
     }
     
     const content = `
-      <div class="match-details" style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; direction: rtl; text-align: center; max-width: 900px; margin: 0 auto; padding: 25px; background: #ffffff; border-radius: 20px; box-shadow: 0 8px 25px rgba(0,0,0,0.1);">
-        <h2 style="color: #1976d2; margin-bottom: 25px; font-size: 32px; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.1); background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">🏆 ${match.league}</h2>
+      <style>
+        @media (max-width: 768px) {
+          .match-teams {
+            flex-direction: column !important;
+            gap: 20px;
+          }
+          .team img {
+            width: 80px !important;
+            height: 80px !important;
+          }
+          .match-time {
+            margin: 0 !important;
+            order: -1;
+          }
+        }
+        @media (max-width: 480px) {
+          .team img {
+            width: 60px !important;
+            height: 60px !important;
+          }
+        }
+      </style>
+      
+      <div class="match-details" style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; direction: rtl; text-align: center; width: 100%; padding: 15px; background: #ffffff; box-sizing: border-box;">
+        <h2 style="color: #1976d2; margin-bottom: 25px; font-size: clamp(24px, 6vw, 32px); font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.1); background: linear-gradient(135deg, #1976d2 0%, #42a5f5 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">🏆 ${match.league}</h2>
         
-        <div class="teams" style="display: flex; align-items: center; justify-content: space-between; margin: 35px 0; padding: 35px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 20px; box-shadow: 0 6px 15px rgba(0,0,0,0.08); border: 1px solid #dee2e6;">
-          <div class="team home" style="text-align: center; flex: 1;">
-            ${match.homeTeamLogo ? `<img src="${match.homeTeamLogo}" alt="${match.homeTeam}" style="width: 120px; height: 120px; object-fit: contain; margin-bottom: 20px; border-radius: 60px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 3px solid #fff; background: #fff;">` : ''}
-            <h3 style="margin: 0; color: #2c3e50; font-size: 22px; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.05);">${match.homeTeam}</h3>
+        <div class="teams match-teams" style="display: flex; align-items: center; justify-content: space-between; margin: 25px 0; padding: 20px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 20px; box-shadow: 0 6px 15px rgba(0,0,0,0.08); border: 1px solid #dee2e6; flex-wrap: wrap;">
+          <div class="team home" style="text-align: center; flex: 1; min-width: 150px;">
+            ${match.homeTeamLogo ? `<img src="${match.homeTeamLogo}" alt="${match.homeTeam}" style="width: clamp(80px, 15vw, 120px); height: clamp(80px, 15vw, 120px); object-fit: contain; margin-bottom: 15px; border-radius: 50%; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 3px solid #fff; background: #fff;">` : ''}
+            <h3 style="margin: 0; color: #2c3e50; font-size: clamp(16px, 4vw, 22px); font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.05); word-wrap: break-word;">${match.homeTeam}</h3>
           </div>
           
-          <div class="match-time" style="text-align: center; flex: 0 0 auto; margin: 0 35px; padding: 25px; background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%); border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 2px solid #1976d2;">
-            <p style="font-size: 36px; font-weight: bold; color: #1976d2; margin: 8px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.1);">⏰ ${match.time}</p>
-            <p style="font-size: 20px; color: #666; margin: 8px 0; font-weight: 600; background: #e3f2fd; padding: 8px 15px; border-radius: 20px;">${match.date === 'today' ? 'اليوم' : match.date === 'tomorrow' ? 'غداً' : 'أمس'}</p>
+          <div class="match-time" style="text-align: center; flex: 0 0 auto; margin: 0 20px; padding: 20px; background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%); border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 2px solid #1976d2; min-width: 150px;">
+            <p style="font-size: clamp(28px, 8vw, 36px); font-weight: bold; color: #1976d2; margin: 8px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.1);">⏰ ${match.time}</p>
+            <p style="font-size: clamp(16px, 4vw, 20px); color: #666; margin: 8px 0; font-weight: 600; background: #e3f2fd; padding: 8px 15px; border-radius: 20px;">${match.date === 'today' ? 'اليوم' : match.date === 'tomorrow' ? 'غداً' : 'أمس'}</p>
           </div>
           
-          <div class="team away" style="text-align: center; flex: 1;">
-            ${match.awayTeamLogo ? `<img src="${match.awayTeamLogo}" alt="${match.awayTeam}" style="width: 120px; height: 120px; object-fit: contain; margin-bottom: 20px; border-radius: 60px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 3px solid #fff; background: #fff;">` : ''}
-            <h3 style="margin: 0; color: #2c3e50; font-size: 22px; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.05);">${match.awayTeam}</h3>
+          <div class="team away" style="text-align: center; flex: 1; min-width: 150px;">
+            ${match.awayTeamLogo ? `<img src="${match.awayTeamLogo}" alt="${match.awayTeam}" style="width: clamp(80px, 15vw, 120px); height: clamp(80px, 15vw, 120px); object-fit: contain; margin-bottom: 15px; border-radius: 50%; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 3px solid #fff; background: #fff;">` : ''}
+            <h3 style="margin: 0; color: #2c3e50; font-size: clamp(16px, 4vw, 22px); font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.05); word-wrap: break-word;">${match.awayTeam}</h3>
           </div>
         </div>
         
-        <div class="match-info" style="margin: 30px 0; padding: 25px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px; box-shadow: 0 6px 15px rgba(102, 126, 234, 0.3);">
-          <p style="margin: 0; font-size: 20px; font-weight: 600; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">📺 القناة الناقلة: ${match.broadcaster}</p>
+        <div class="match-info" style="margin: 20px 0; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px; box-shadow: 0 6px 15px rgba(102, 126, 234, 0.3);">
+          <p style="margin: 0; font-size: clamp(16px, 4vw, 20px); font-weight: 600; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">📺 القناة الناقلة: ${match.broadcaster}</p>
         </div>
         
         ${playerSection}
         
-        <div style="margin-top: 35px; padding: 25px; background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); border-radius: 15px; border-left: 6px solid #4caf50; box-shadow: 0 4px 10px rgba(76, 175, 80, 0.2);">
-          <p style="margin: 0; color: #2e7d32; font-size: 18px; font-weight: 600; text-shadow: 1px 1px 2px rgba(0,0,0,0.05);">💡 استمتع بمشاهدة المباراة بجودة عالية ومجاناً على موقعنا</p>
+        <div style="margin-top: 25px; padding: 20px; background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); border-radius: 15px; border-left: 6px solid #4caf50; box-shadow: 0 4px 10px rgba(76, 175, 80, 0.2);">
+          <p style="margin: 0; color: #2e7d32; font-size: clamp(14px, 4vw, 18px); font-weight: 600; text-shadow: 1px 1px 2px rgba(0,0,0,0.05);">💡 استمتع بمشاهدة المباراة بجودة عالية ومجاناً على موقعنا</p>
         </div>
         
-        <div style="margin-top: 25px; padding: 20px; background: #f8f9fa; border-radius: 10px; border-top: 3px solid #17a2b8;">
-          <p style="margin: 0; color: #6c757d; font-size: 14px; font-style: italic;">تابعونا للحصول على أحدث مباريات كرة القدم وأهم الأحداث الرياضية</p>
+        <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px; border-top: 3px solid #17a2b8;">
+          <p style="margin: 0; color: #6c757d; font-size: clamp(12px, 3vw, 14px); font-style: italic;">تابعونا للحصول على أحدث مباريات كرة القدم وأهم الأحداث الرياضية</p>
         </div>
       </div>
     `;
@@ -358,7 +423,6 @@ async function createPost(match) {
         
         try {
           const retryResponse = await makeAuthenticatedRequest(url, postData, 'POST');
-          // Store URL mapping for retry as well
           await storeUrlMapping(match, retryResponse.data.url, retryResponse.data.published);
           console.log(`✅ Post created after retry: ${retryResponse.data.url}`);
           return retryResponse.data;
