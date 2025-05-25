@@ -23,24 +23,21 @@ async function makeAuthenticatedRequest(url, data, method = 'GET') {
   return await axios(config);
 }
 
-// Helper function to parse time and check if match is current or future
 function isMatchCurrentOrFuture(timeString) {
   if (!timeString || timeString === 'TBD' || timeString === 'انتهت') {
-    return false; // Past or invalid matches
+    return false; 
   }
   
   try {
     const now = new Date();
     const currentTime = now.getHours() * 60 + now.getMinutes();
     
-    // Parse match time (assuming format like "14:30" or "2:30 PM")
     const timeParts = timeString.match(/(\d{1,2}):(\d{2})/);
     if (!timeParts) return false;
     
     let matchHour = parseInt(timeParts[1]);
     let matchMinute = parseInt(timeParts[2]);
     
-    // Handle AM/PM format if present
     if (timeString.toLowerCase().includes('pm') && matchHour !== 12) {
       matchHour += 12;
     } else if (timeString.toLowerCase().includes('am') && matchHour === 12) {
@@ -49,7 +46,6 @@ function isMatchCurrentOrFuture(timeString) {
     
     const matchTime = matchHour * 60 + matchMinute;
     
-    // Allow matches that start within the next 30 minutes or are currently ongoing
     return matchTime >= (currentTime - 30);
   } catch (error) {
     console.error('Error parsing match time:', error);
@@ -57,19 +53,16 @@ function isMatchCurrentOrFuture(timeString) {
   }
 }
 
-// Enhanced function to filter today's matches
 function filterTodayMatches(matches) {
   const currentDate = new Date();
   const today = currentDate.toISOString().split('T')[0];
   
   return matches.filter(match => {
-    // Only process today's matches
     if (match.date !== 'today') {
       console.log(`🔄 Filtering out non-today match: ${match.homeTeam} vs ${match.awayTeam} (${match.date})`);
       return false;
     }
     
-    // Check if match is current or future
     if (!isMatchCurrentOrFuture(match.time)) {
       console.log(`⏰ Filtering out past match: ${match.homeTeam} vs ${match.awayTeam} at ${match.time}`);
       return false;
