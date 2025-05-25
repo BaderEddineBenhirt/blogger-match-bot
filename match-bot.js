@@ -23,6 +23,100 @@ async function makeAuthenticatedRequest(url, data, method = 'GET') {
   return await axios(config);
 }
 
+// Helper function to parse time and check if match is current or future
+function isMatchCurrentOrFuture(timeString) {
+  if (!timeString || timeString === 'TBD' || timeString === 'انتهت') {
+    return false; // Past or invalid matches
+  }
+  
+  try {
+    const now = new Date();
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+    
+    // Parse match time (assuming format like "14:30" or "2:30 PM")
+    const timeParts = timeString.match(/(\d{1,2}):(\d{2})/);
+    if (!timeParts) return false;
+    
+    let matchHour = parseInt(timeParts[1]);
+    let matchMinute = parseInt(timeParts[2]);
+    
+    // Handle AM/PM format if present
+    if (timeString.toLowerCase().includes('pm') && matchHour !== 12) {
+      matchHour += 12;
+    } else if (timeString.toLowerCase().includes('am') && matchHour === 12) {
+      matchHour = 0;
+    }
+    
+    const matchTime = matchHour * 60 + matchMinute;
+    
+    // Allow matches that start within the next 30 minutes or are currently ongoing
+    return matchTime >= (currentTime - 30);
+  } catch (error) {
+    console.error('Error parsing match time:', error);
+    return false;
+  }
+}
+
+// Enhanced function to filter today's matches
+function filterTodayMatches(matches) {
+  const currentDate = new Date();
+  const today = currentDate.toISOString().split('T')[0];
+  
+  return matches.filter(match => {
+    // Only process today's matches
+    if (match.date !== 'today') {
+      console.log(`🔄 Filtering out non-today match: ${match.homeTeam} vs ${match.awayTeam} (${match.date})`);
+      return false;
+    }
+    
+    // Check if match is current or future
+    if (!isMatchCurrentOrFuture(match.time)) {
+      console.log(`⏰ Filtering out past match: ${match.homeTeam} vs ${match.awayTeam} at ${match.time}`);
+      return false;
+    }
+    
+    console.log(`✅ Including current/future match: ${match.homeTeam} vs ${match.awayTeam} at ${match.time}`);
+    return true;
+  });
+}
+
+async function createRedirectPost(match, redirectReason) {
+  try {
+    const title = `${match.homeTeam} vs ${match.awayTeam} - ${match.league}`;
+    
+    console.log(`Creating redirect post for: ${title} (${redirectReason})`);
+    
+    const redirectContent = `
+      <script>
+        // Immediate redirect
+        window.location.replace('/');
+      </script>
+      <meta http-equiv="refresh" content="0;url=/">
+      <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
+        <h2>جاري التحويل...</h2>
+        <p>سيتم تحويلك إلى الصفحة الرئيسية</p>
+        <p><a href="/">اضغط هنا إذا لم يتم التحويل تلقائياً</a></p>
+      </div>
+    `;
+    
+    const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/`;
+    
+    const postData = {
+      kind: 'blogger#post',
+      blog: { id: BLOG_ID },
+      title: title,
+      content: redirectContent
+    };
+    
+    const response = await makeAuthenticatedRequest(url, postData, 'POST');
+    console.log(`🔄 Redirect post created: ${response.data.url} (${redirectReason})`);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error creating redirect post:', error.response?.data || error.message);
+    return null;
+  }
+}
+
 async function fetchMatches(day = 'today') {
   try {
     let url;
@@ -267,7 +361,6 @@ async function storeUrlMapping(match, actualUrl, publishedDate) {
 function cleanIframeContent(iframeData) {
   if (!iframeData) return null;
   
-  // Create clean iframe HTML without telegram circle and other unwanted elements
   return `
     <div class="albaplayer_server-body">
       <div class="video-con embed-responsive">
@@ -305,7 +398,6 @@ function cleanIframeContent(iframeData) {
       </div>
     </div>
     <style>
-      /* Hide telegram circle and any popup messages */
       #tme, 
       #tme_message,
       .telegram-popup,
@@ -320,13 +412,11 @@ function cleanIframeContent(iframeData) {
         pointer-events: none !important;
       }
       
-      /* Ensure clean player interface */
       .albaplayer_server-body {
         position: relative !important;
         overflow: hidden !important;
       }
       
-      /* Remove any floating elements */
       div[style*="position: fixed"],
       div[style*="position: absolute"][style*="bottom"],
       div[style*="position: absolute"][style*="right"] {
@@ -335,7 +425,7 @@ function cleanIframeContent(iframeData) {
     </style>`;
 }
 
-async function createPost(match) {
+async function createPost(match, isCurrentOrFuture = true) {
   try {
     const title = `${match.homeTeam} vs ${match.awayTeam} - ${match.league}`;
     
@@ -345,6 +435,10 @@ async function createPost(match) {
     }
     
     console.log(`Creating post for: ${title}`);
+    
+    if (!isCurrentOrFuture) {
+      return await createRedirectPost(match, 'past_or_tomorrow');
+    }
     
     const iframeData = await extractIframeFromMatch(match.matchLink);
     
@@ -361,7 +455,7 @@ async function createPost(match) {
       playerSection = `
         <div id="match-player" style="text-align: center; margin: 20px 0; padding: 20px; background: linear-gradient(135deg, #ff7e5f 0%, #feb47b 100%); border-radius: 15px; box-shadow: 0 6px 12px rgba(0,0,0,0.15);">
           <div class="player-container">
-            <h3 style="color: #fff; margin-bottom: 15px; font-size: clamp(18px, 4vw, 20px); text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">⏰ بث المباراة قريباً</h3>
+            <h3 style="color: #fff; margin-bottom: 15px; font-size: clamp(18px, 4vw, 20px); text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">⏰ سيتم إضافة بث المباراة قبل موعد المباراة</h3>
           </div>
         </div>`;
     }
@@ -401,7 +495,7 @@ async function createPost(match) {
           
           <div class="match-time" style="text-align: center; flex: 0 0 auto; margin: 0 20px; padding: 20px; background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%); border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 2px solid #1976d2; min-width: 150px;">
             <p style="font-size: clamp(28px, 8vw, 36px); font-weight: bold; color: #1976d2; margin: 8px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.1);">⏰ ${match.time}</p>
-            <p style="font-size: clamp(16px, 4vw, 20px); color: #666; margin: 8px 0; font-weight: 600; background: #e3f2fd; padding: 8px 15px; border-radius: 20px;">${match.date === 'today' ? 'اليوم' : match.date === 'tomorrow' ? 'غداً' : 'أمس'}</p>
+            <p style="font-size: clamp(16px, 4vw, 20px); color: #666; margin: 8px 0; font-weight: 600; background: #e3f2fd; padding: 8px 15px; border-radius: 20px;">اليوم</p>
           </div>
           
           <div class="team away" style="text-align: center; flex: 1; min-width: 150px;">
@@ -468,7 +562,7 @@ async function createPost(match) {
 
 async function createMatchPosts() {
   try {
-    console.log('🚀 Starting to create match posts...');
+    console.log('🚀 Starting to create match posts with filtering...');
     
     if (!BLOG_ID || !API_KEY || !ACCESS_TOKEN) {
       console.error('❌ Missing required environment variables');
@@ -479,19 +573,33 @@ async function createMatchPosts() {
     console.log('✅ All required environment variables found');
     console.log(`📝 Blog ID: ${BLOG_ID}`);
     
-    const matches = await fetchMatches('today');
+    const [todayMatches, yesterdayMatches, tomorrowMatches] = await Promise.all([
+      fetchMatches('today'),
+      fetchMatches('yesterday'), 
+      fetchMatches('tomorrow')
+    ]);
     
-    if (matches.length === 0) {
-      console.log('ℹ️  No matches found for today');
+    console.log(`\n📊 Match Summary:`);
+    console.log(`   Today: ${todayMatches.length} matches`);
+    console.log(`   Yesterday: ${yesterdayMatches.length} matches`);
+    console.log(`   Tomorrow: ${tomorrowMatches.length} matches`);
+    
+    const filteredTodayMatches = filterTodayMatches(todayMatches);
+    console.log(`\n🔍 After filtering - Today's current/future matches: ${filteredTodayMatches.length}`);
+    
+    if (filteredTodayMatches.length === 0) {
+      console.log('ℹ️  No current or future matches found for today');
       return;
     }
     
     let createdCount = 0;
     let skippedCount = 0;
+    let redirectCount = 0;
     
-    for (const match of matches) {
-      console.log(`\n⚽ Processing: ${match.homeTeam} vs ${match.awayTeam}`);
-      const post = await createPost(match);
+    console.log('\n⚽ Processing today\'s current and future matches...');
+    for (const match of filteredTodayMatches) {
+      console.log(`\n⚽ Processing: ${match.homeTeam} vs ${match.awayTeam} at ${match.time}`);
+      const post = await createPost(match, true);
       
       if (post && post.skipped) {
         skippedCount++;
@@ -508,11 +616,94 @@ async function createMatchPosts() {
       }
     }
     
-    console.log(`\n🎉 Finished! Created ${createdCount} new posts, skipped ${skippedCount} due to rate limits.`);
+    const pastTodayMatches = todayMatches.filter(match => !isMatchCurrentOrFuture(match.time));
+    if (pastTodayMatches.length > 0) {
+      console.log(`\n🔄 Creating redirect posts for ${pastTodayMatches.length} past matches from today...`);
+      for (const match of pastTodayMatches) {
+        console.log(`\n🔄 Creating redirect for past match: ${match.homeTeam} vs ${match.awayTeam}`);
+        const redirectPost = await createRedirectPost(match, 'past_match');
+        if (redirectPost) {
+          redirectCount++;
+        }
+        
+        console.log('⏳ Waiting 10 seconds before next redirect...');
+        await new Promise(resolve => setTimeout(resolve, 10000));
+      }
+    }
+    
+    if (yesterdayMatches.length > 0) {
+      console.log(`\n🔄 Creating redirect posts for ${yesterdayMatches.length} yesterday's matches...`);
+      for (const match of yesterdayMatches) {
+        console.log(`\n🔄 Creating redirect for yesterday's match: ${match.homeTeam} vs ${match.awayTeam}`);
+        const redirectPost = await createRedirectPost(match, 'yesterday_match');
+        if (redirectPost) {
+          redirectCount++;
+        }
+        
+        console.log('⏳ Waiting 10 seconds before next redirect...');
+        await new Promise(resolve => setTimeout(resolve, 10000));
+      }
+    }
+    
+    if (tomorrowMatches.length > 0) {
+      console.log(`\n🔄 Creating redirect posts for ${tomorrowMatches.length} tomorrow's matches...`);
+      for (const match of tomorrowMatches) {
+        console.log(`\n🔄 Creating redirect for tomorrow's match: ${match.homeTeam} vs ${match.awayTeam}`);
+        const redirectPost = await createRedirectPost(match, 'tomorrow_match');
+        if (redirectPost) {
+          redirectCount++;
+        }
+        
+        console.log('⏳ Waiting 10 seconds before next redirect...');
+        await new Promise(resolve => setTimeout(resolve, 10000));
+      }
+    }
+    
+    console.log(`\n🎉 Processing Complete!`);
+    console.log(`   ✅ Created ${createdCount} new match posts (current/future)`);
+    console.log(`   🔄 Created ${redirectCount} redirect posts (past/tomorrow)`);
+    console.log(`   ⏸️  Skipped ${skippedCount} due to rate limits`);
+    console.log(`   📊 Total processed: ${createdCount + redirectCount + skippedCount}`);
+    
   } catch (error) {
     console.error('❌ Error in createMatchPosts:', error);
     process.exit(1);
   }
+}
+
+function getMatchStatus(match) {
+  const now = new Date();
+  const currentTime = now.getHours() * 60 + now.getMinutes();
+  
+  if (match.date === 'yesterday') {
+    return 'past';
+  } else if (match.date === 'tomorrow') {
+    return 'future_day';
+  } else if (match.date === 'today') {
+    if (isMatchCurrentOrFuture(match.time)) {
+      return 'current_or_future';
+    } else {
+      return 'past';
+    }
+  }
+  
+  return 'unknown';
+}
+
+function logMatchProcessing(matches, day) {
+  console.log(`\n📋 ${day.toUpperCase()} MATCHES BREAKDOWN:`);
+  
+  matches.forEach((match, index) => {
+    const status = getMatchStatus(match);
+    const statusEmoji = {
+      'current_or_future': '✅',
+      'past': '⏰',
+      'future_day': '📅',
+      'unknown': '❓'
+    };
+    
+    console.log(`   ${statusEmoji[status]} ${index + 1}. ${match.homeTeam} vs ${match.awayTeam} at ${match.time} (${status})`);
+  });
 }
 
 createMatchPosts();
