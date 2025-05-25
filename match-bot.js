@@ -267,6 +267,7 @@ async function storeUrlMapping(match, actualUrl, publishedDate) {
 function cleanIframeContent(iframeData) {
   if (!iframeData) return null;
   
+  // Create clean iframe HTML without telegram circle and other unwanted elements
   return `
     <div class="albaplayer_server-body">
       <div class="video-con embed-responsive">
@@ -304,6 +305,7 @@ function cleanIframeContent(iframeData) {
       </div>
     </div>
     <style>
+      /* Aggressively hide telegram and popup elements */
       #tme,
       #tme_message,
       .telegram-popup,
@@ -335,6 +337,7 @@ function cleanIframeContent(iframeData) {
         overflow: hidden !important;
       }
       
+      /* Hide subscription messages */
       div:contains("اشترك في موقعنا مجانا"),
       div:contains("خدمة الكورة لايف المجانية"),
       div:contains("اضغط للاشتراك"),
@@ -343,17 +346,20 @@ function cleanIframeContent(iframeData) {
         display: none !important;
       }
       
+      /* Remove any floating circular elements */
       div[style*="width: 48px"][style*="height: 48px"][style*="border-radius: 50%"],
       div[style*="position: fixed"][style*="z-index: 99999999"] {
         display: none !important;
       }
       
+      /* Clean player interface */
       .albaplayer_server-body {
         position: relative !important;
         overflow: hidden !important;
         background: #000 !important;
       }
       
+      /* Ensure iframe fills properly */
       .video-con.embed-responsive {
         width: 100% !important;
         height: 100% !important;
@@ -367,10 +373,13 @@ function cleanIframeContent(iframeData) {
       }
     </style>
     <script>
+      // JavaScript to remove telegram elements after page load
       document.addEventListener('DOMContentLoaded', function() {
+        // Remove telegram elements
         const telegramElements = document.querySelectorAll('#tme, #tme_message, [id*="telegram"], [class*="telegram"]');
         telegramElements.forEach(el => el.remove());
         
+        // Remove subscription popups
         const popups = document.querySelectorAll('div[style*="position: fixed"], div[style*="z-index: 99999"]');
         popups.forEach(popup => {
           if (popup.innerHTML.includes('اشترك') || popup.innerHTML.includes('telegram') || popup.innerHTML.includes('التليجرام')) {
@@ -378,10 +387,12 @@ function cleanIframeContent(iframeData) {
           }
         });
         
+        // Remove circular floating elements
         const circles = document.querySelectorAll('div[style*="border-radius: 50%"][style*="position: fixed"]');
         circles.forEach(circle => circle.remove());
       });
       
+      // Continuous monitoring to remove telegram elements
       setInterval(function() {
         const unwanted = document.querySelectorAll('#tme, #tme_message, [style*="bottom: 50px"][style*="position: fixed"]');
         unwanted.forEach(el => el.remove());
