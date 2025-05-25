@@ -1,6 +1,5 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
-const fs = require('fs').promises;
 
 const BLOG_ID = process.env.BLOG_ID;
 const API_KEY = process.env.API_KEY;
@@ -223,42 +222,6 @@ async function checkPostExists(title) {
   }
 }
 
-function createMatchKey(homeTeam, awayTeam, date) {
-  const combined = `${homeTeam}_${awayTeam}_${date}`.toLowerCase();
-  return combined.replace(/\s+/g, '_').replace(/[^\w_]/g, '');
-}
-
-async function storeUrlMapping(match, actualUrl, publishedDate) {
-  const path = './match-urls.json';
-  
-  try {
-    let mappings = {};
-    try {
-      const data = await fs.readFile(path, 'utf8');
-      mappings = JSON.parse(data);
-    } catch (e) {
-      console.log('Creating new URL mappings file');
-    }
-    
-    const matchKey = createMatchKey(match.homeTeam, match.awayTeam, match.date);
-    
-    mappings[matchKey] = {
-      url: actualUrl,
-      homeTeam: match.homeTeam,
-      awayTeam: match.awayTeam,
-      league: match.league,
-      date: match.date,
-      published: publishedDate,
-      lastUpdated: new Date().toISOString()
-    };
-    
-    await fs.writeFile(path, JSON.stringify(mappings, null, 2));
-    console.log(`📝 URL mapping stored: ${matchKey} -> ${actualUrl}`);
-  } catch (error) {
-    console.error('Error storing URL mapping:', error);
-  }
-}
-
 async function createPost(match) {
   try {
     const title = `${match.homeTeam} vs ${match.awayTeam} - ${match.league}`;
@@ -339,8 +302,6 @@ async function createPost(match) {
     
     const response = await makeAuthenticatedRequest(url, postData, 'POST');
     
-    await storeUrlMapping(match, response.data.url, response.data.published);
-    
     console.log(`✅ Post created: ${response.data.url}`);
     return response.data;
   } catch (error) {
@@ -353,7 +314,6 @@ async function createPost(match) {
         
         try {
           const retryResponse = await makeAuthenticatedRequest(url, postData, 'POST');
-          await storeUrlMapping(match, retryResponse.data.url, retryResponse.data.published);
           console.log(`✅ Post created after retry: ${retryResponse.data.url}`);
           return retryResponse.data;
         } catch (retryError) {
