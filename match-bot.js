@@ -54,9 +54,6 @@ function isMatchCurrentOrFuture(timeString) {
 }
 
 function filterTodayMatches(matches) {
-  const currentDate = new Date();
-  const today = currentDate.toISOString().split('T')[0];
-  
   return matches.filter(match => {
     if (match.date !== 'today') {
       console.log(`🔄 Filtering out non-today match: ${match.homeTeam} vs ${match.awayTeam} (${match.date})`);
@@ -71,43 +68,6 @@ function filterTodayMatches(matches) {
     console.log(`✅ Including current/future match: ${match.homeTeam} vs ${match.awayTeam} at ${match.time}`);
     return true;
   });
-}
-
-async function createRedirectPost(match, redirectReason) {
-  try {
-    const title = `${match.homeTeam} vs ${match.awayTeam} - ${match.league}`;
-    
-    console.log(`Creating redirect post for: ${title} (${redirectReason})`);
-    
-    const redirectContent = `
-      <script>
-        // Immediate redirect
-        window.location.replace('/');
-      </script>
-      <meta http-equiv="refresh" content="0;url=/">
-      <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
-        <h2>جاري التحويل...</h2>
-        <p>سيتم تحويلك إلى الصفحة الرئيسية</p>
-        <p><a href="/">اضغط هنا إذا لم يتم التحويل تلقائياً</a></p>
-      </div>
-    `;
-    
-    const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/`;
-    
-    const postData = {
-      kind: 'blogger#post',
-      blog: { id: BLOG_ID },
-      title: title,
-      content: redirectContent
-    };
-    
-    const response = await makeAuthenticatedRequest(url, postData, 'POST');
-    console.log(`🔄 Redirect post created: ${response.data.url} (${redirectReason})`);
-    return response.data;
-  } catch (error) {
-    console.error('❌ Error creating redirect post:', error.response?.data || error.message);
-    return null;
-  }
 }
 
 async function fetchMatches(day = 'today') {
@@ -219,38 +179,37 @@ async function extractIframeFromMatch(matchUrl) {
     
     let iframe = null;
     
+    const allIframes = $('iframe');
+    console.log(`📊 Total iframes found: ${allIframes.length}`);
+    
+    allIframes.each((index, element) => {
+      const src = $(element).attr('src');
+      console.log(`  ${index + 1}. ${src}`);
+    });
+    
     const iframeSelectors = [
       '.entry-content iframe',
-      '.entry iframe',
+      '.entry iframe', 
       '#the-post iframe',
       'article iframe',
       '.post-content iframe',
-      
-      'iframe[src*="alkoora.live"]',
-      'iframe[src*="albaplayer"]',
-      'iframe[src*="ddd.alkoora.live"]',
-      
-      'p iframe[allowfullscreen]',
-      'iframe[allowfullscreen][height="500px"]',
-      'iframe[allowfullscreen]',
-      
+      'p iframe',
+      'div iframe',
       'iframe'
     ];
     
     for (const selector of iframeSelectors) {
       const foundIframes = $(selector);
+      console.log(`🔍 Selector "${selector}" found ${foundIframes.length} iframe(s)`);
       
       foundIframes.each((index, element) => {
         const src = $(element).attr('src');
         
         if (src && 
-            !src.includes('aqle3.com') &&
+            !src.includes('aqle3.com') && 
             !src.includes('bvtpk.com') &&
-            !src.includes('btag.min.js') &&
-            !src.includes('tag.min.js') &&
             !src.includes('googletagmanager') &&
-            !src.includes('advertisement') &&
-            !src.includes('banner') &&
+            !src.includes('gtag.js') &&
             src.length > 10) {
           
           iframe = {
@@ -262,9 +221,9 @@ async function extractIframeFromMatch(matchUrl) {
             scrolling: $(element).attr('scrolling') || '1'
           };
           
-          console.log(`✅ Found iframe: ${iframe.src}`);
-          console.log(`   - Width: ${iframe.width}, Height: ${iframe.height}`);
-          console.log(`   - Allowfullscreen: ${iframe.allowfullscreen}, Scrolling: ${iframe.scrolling}`);
+          console.log(`✅ Selected iframe: ${iframe.src}`);
+          console.log(`   - Selector used: ${selector}`);
+          console.log(`   - Dimensions: ${iframe.width} x ${iframe.height}`);
           return false;
         }
       });
@@ -272,52 +231,51 @@ async function extractIframeFromMatch(matchUrl) {
       if (iframe) break;
     }
     
-    if (!iframe) {
-      const allIframes = $('iframe');
-      console.log(`❌ No suitable iframe found. Total iframes on page: ${allIframes.length}`);
+    if (!iframe && allIframes.length > 0) {
+      console.log('🔄 Taking first non-ad iframe...');
       
-      if (allIframes.length > 0) {
-        console.log('All iframes found:');
-        allIframes.each((index, element) => {
-          const src = $(element).attr('src');
-          const width = $(element).attr('width');
-          const height = $(element).attr('height');
-          const allowfullscreen = $(element).attr('allowfullscreen');
-          console.log(`  ${index + 1}. src: ${src}`);
-          console.log(`     width: ${width}, height: ${height}, allowfullscreen: ${allowfullscreen}`);
-          console.log(`     HTML: ${$(element).toString().substring(0, 200)}...`);
-        });
+      allIframes.each((index, element) => {
+        const src = $(element).attr('src');
         
-        const fallbackIframe = allIframes.first();
-        const fallbackSrc = fallbackIframe.attr('src');
-        
-        if (fallbackSrc && 
-            !fallbackSrc.includes('aqle3.com') && 
-            !fallbackSrc.includes('bvtpk.com') &&
-            !fallbackSrc.includes('googletagmanager')) {
+        if (src && 
+            !src.includes('aqle3.com') && 
+            !src.includes('bvtpk.com') &&
+            !src.includes('googletagmanager') &&
+            !src.includes('gtag.js') &&
+            src.length > 10) {
           
           iframe = {
-            src: fallbackSrc.startsWith('//') ? `https:${fallbackSrc}` : fallbackSrc,
-            width: fallbackIframe.attr('width') || '100%',
-            height: fallbackIframe.attr('height') || '500px',
-            allowfullscreen: fallbackIframe.attr('allowfullscreen') || 'true',
-            frameborder: fallbackIframe.attr('frameborder') || '0',
-            scrolling: fallbackIframe.attr('scrolling') || '1'
+            src: src.startsWith('//') ? `https:${src}` : src,
+            width: $(element).attr('width') || '100%',
+            height: $(element).attr('height') || '500px',
+            allowfullscreen: $(element).attr('allowfullscreen') || 'true',
+            frameborder: $(element).attr('frameborder') || '0',
+            scrolling: $(element).attr('scrolling') || '1'
           };
           
-          console.log(`🔄 Using fallback iframe: ${iframe.src}`);
+          console.log(`🔄 Using first valid iframe: ${iframe.src}`);
+          return false;
         }
-      }
+      });
+    }
+    
+    if (!iframe) {
+      console.log(`❌ No suitable iframe found in ${allIframes.length} total iframes`);
       
-      const videoElements = $('video, embed, object');
-      if (videoElements.length > 0) {
-        console.log(`Found ${videoElements.length} other video elements`);
+      if (allIframes.length > 0) {
+        console.log('📋 All iframe sources found:');
+        allIframes.each((index, element) => {
+          const src = $(element).attr('src');
+          const fullHtml = $(element).toString();
+          console.log(`  ${index + 1}. Source: ${src}`);
+          console.log(`     HTML: ${fullHtml.substring(0, 150)}...`);
+        });
       }
     }
     
     return iframe;
   } catch (error) {
-    console.error('Error extracting iframe:', error.message);
+    console.error('❌ Error extracting iframe:', error.message);
     return null;
   }
 }
@@ -447,7 +405,7 @@ function cleanIframeContent(iframeData) {
     </style>`;
 }
 
-async function createPost(match, isCurrentOrFuture = true) {
+async function createPost(match) {
   try {
     const title = `${match.homeTeam} vs ${match.awayTeam} - ${match.league}`;
     
@@ -457,10 +415,6 @@ async function createPost(match, isCurrentOrFuture = true) {
     }
     
     console.log(`Creating post for: ${title}`);
-    
-    if (!isCurrentOrFuture) {
-      return await createRedirectPost(match, 'past_or_tomorrow');
-    }
     
     const iframeData = await extractIframeFromMatch(match.matchLink);
     
@@ -504,7 +458,6 @@ async function createPost(match, isCurrentOrFuture = true) {
             height: 60px !important;
           }
         }
-        /* Hide any potential external links */
         .external-link, .original-link {
           display: none !important;
         }
@@ -530,8 +483,18 @@ async function createPost(match, isCurrentOrFuture = true) {
           </div>
         </div>
         
-        <div class="match-info" style="margin: 20px 0; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px; box-shadow: 0 6px 15px rgba(102, 126, 234, 0.3);">
-          <p style="margin: 0; font-size: clamp(16px, 4vw, 20px); font-weight: 600; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">📺 القناة الناقلة: ${match.broadcaster}</p>
+        <div class="match-info" style="margin: clamp(15px, 4vw, 25px) 0; padding: clamp(15px, 4vw, 25px); background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: clamp(12px, 3vw, 18px); box-shadow: 0 clamp(4px, 1.5vw, 8px) clamp(10px, 3vw, 20px) rgba(102, 126, 234, 0.3); position: relative; overflow: hidden;">
+          <div style="position: absolute; top: -50%; right: -50%; width: 100%; height: 100%; background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%); pointer-events: none;"></div>
+          <div style="position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: clamp(8px, 2vw, 12px); flex-wrap: wrap;">
+            <div style="background: rgba(255,255,255,0.15); padding: clamp(8px, 2vw, 12px); border-radius: 50%; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2);">
+              <span style="font-size: clamp(20px, 5vw, 28px); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">📺</span>
+            </div>
+            <p style="margin: 0; font-size: clamp(14px, 3.5vw, 18px); font-weight: 600; text-shadow: 0 2px 4px rgba(0,0,0,0.4); text-align: center; line-height: 1.4; letter-spacing: 0.5px;">
+              <span style="display: block; font-size: clamp(12px, 3vw, 14px); opacity: 0.9; margin-bottom: 2px;">القناة الناقلة</span>
+              <span style="font-size: clamp(16px, 4vw, 20px); font-weight: 700;">${match.broadcaster}</span>
+            </p>
+          </div>
+          <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, rgba(255,255,255,0.3), rgba(255,255,255,0.7), rgba(255,255,255,0.3));"></div>
         </div>
         
         ${playerSection}
@@ -599,16 +562,10 @@ async function createMatchPosts() {
     console.log('✅ All required environment variables found');
     console.log(`📝 Blog ID: ${BLOG_ID}`);
     
-    const [todayMatches, yesterdayMatches, tomorrowMatches] = await Promise.all([
-      fetchMatches('today'),
-      fetchMatches('yesterday'), 
-      fetchMatches('tomorrow')
-    ]);
+    const todayMatches = await fetchMatches('today');
     
     console.log(`\n📊 Match Summary:`);
     console.log(`   Today: ${todayMatches.length} matches`);
-    console.log(`   Yesterday: ${yesterdayMatches.length} matches`);
-    console.log(`   Tomorrow: ${tomorrowMatches.length} matches`);
     
     const filteredTodayMatches = filterTodayMatches(todayMatches);
     console.log(`\n🔍 After filtering - Today's current/future matches: ${filteredTodayMatches.length}`);
@@ -620,12 +577,11 @@ async function createMatchPosts() {
     
     let createdCount = 0;
     let skippedCount = 0;
-    let redirectCount = 0;
     
     console.log('\n⚽ Processing today\'s current and future matches...');
     for (const match of filteredTodayMatches) {
       console.log(`\n⚽ Processing: ${match.homeTeam} vs ${match.awayTeam} at ${match.time}`);
-      const post = await createPost(match, true);
+      const post = await createPost(match);
       
       if (post && post.skipped) {
         skippedCount++;
@@ -642,94 +598,15 @@ async function createMatchPosts() {
       }
     }
     
-    const pastTodayMatches = todayMatches.filter(match => !isMatchCurrentOrFuture(match.time));
-    if (pastTodayMatches.length > 0) {
-      console.log(`\n🔄 Creating redirect posts for ${pastTodayMatches.length} past matches from today...`);
-      for (const match of pastTodayMatches) {
-        console.log(`\n🔄 Creating redirect for past match: ${match.homeTeam} vs ${match.awayTeam}`);
-        const redirectPost = await createRedirectPost(match, 'past_match');
-        if (redirectPost) {
-          redirectCount++;
-        }
-        
-        console.log('⏳ Waiting 10 seconds before next redirect...');
-        await new Promise(resolve => setTimeout(resolve, 10000));
-      }
-    }
-    
-    if (yesterdayMatches.length > 0) {
-      console.log(`\n🔄 Creating redirect posts for ${yesterdayMatches.length} yesterday's matches...`);
-      for (const match of yesterdayMatches) {
-        console.log(`\n🔄 Creating redirect for yesterday's match: ${match.homeTeam} vs ${match.awayTeam}`);
-        const redirectPost = await createRedirectPost(match, 'yesterday_match');
-        if (redirectPost) {
-          redirectCount++;
-        }
-        
-        console.log('⏳ Waiting 10 seconds before next redirect...');
-        await new Promise(resolve => setTimeout(resolve, 10000));
-      }
-    }
-    
-    if (tomorrowMatches.length > 0) {
-      console.log(`\n🔄 Creating redirect posts for ${tomorrowMatches.length} tomorrow's matches...`);
-      for (const match of tomorrowMatches) {
-        console.log(`\n🔄 Creating redirect for tomorrow's match: ${match.homeTeam} vs ${match.awayTeam}`);
-        const redirectPost = await createRedirectPost(match, 'tomorrow_match');
-        if (redirectPost) {
-          redirectCount++;
-        }
-        
-        console.log('⏳ Waiting 10 seconds before next redirect...');
-        await new Promise(resolve => setTimeout(resolve, 10000));
-      }
-    }
-    
     console.log(`\n🎉 Processing Complete!`);
     console.log(`   ✅ Created ${createdCount} new match posts (current/future)`);
-    console.log(`   🔄 Created ${redirectCount} redirect posts (past/tomorrow)`);
     console.log(`   ⏸️  Skipped ${skippedCount} due to rate limits`);
-    console.log(`   📊 Total processed: ${createdCount + redirectCount + skippedCount}`);
+    console.log(`   📊 Total processed: ${createdCount + skippedCount}`);
     
   } catch (error) {
     console.error('❌ Error in createMatchPosts:', error);
     process.exit(1);
   }
-}
-
-function getMatchStatus(match) {
-  const now = new Date();
-  const currentTime = now.getHours() * 60 + now.getMinutes();
-  
-  if (match.date === 'yesterday') {
-    return 'past';
-  } else if (match.date === 'tomorrow') {
-    return 'future_day';
-  } else if (match.date === 'today') {
-    if (isMatchCurrentOrFuture(match.time)) {
-      return 'current_or_future';
-    } else {
-      return 'past';
-    }
-  }
-  
-  return 'unknown';
-}
-
-function logMatchProcessing(matches, day) {
-  console.log(`\n📋 ${day.toUpperCase()} MATCHES BREAKDOWN:`);
-  
-  matches.forEach((match, index) => {
-    const status = getMatchStatus(match);
-    const statusEmoji = {
-      'current_or_future': '✅',
-      'past': '⏰',
-      'future_day': '📅',
-      'unknown': '❓'
-    };
-    
-    console.log(`   ${statusEmoji[status]} ${index + 1}. ${match.homeTeam} vs ${match.awayTeam} at ${match.time} (${status})`);
-  });
 }
 
 createMatchPosts();
