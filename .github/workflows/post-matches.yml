@@ -2,7 +2,7 @@ name: Post Matches to Blogger
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '0 */6 * * *' 
   workflow_dispatch:
 
 jobs:
@@ -29,18 +29,29 @@ jobs:
     
     - name: Generate Blogger Access Token
       run: |
-        ACCESS_TOKEN=$(curl -s -X POST https://oauth2.googleapis.com/token \
+        RESPONSE=$(curl -s -X POST https://oauth2.googleapis.com/token \
           -H "Content-Type: application/x-www-form-urlencoded" \
-          -d "client_id=${{ secrets.BLOGGER_CLIENT_ID }}" \
-          -d "client_secret=${{ secrets.BLOGGER_CLIENT_SECRET }}" \
-          -d "refresh_token=${{ secrets.BLOGGER_REFRESH_TOKEN }}" \
-          -d "grant_type=refresh_token" | jq -r '.access_token')
+          -d "client_id=${{ secrets.CLIENT_ID }}" \
+          -d "client_secret=${{ secrets.CLIENT_SECRET }}" \
+          -d "refresh_token=${{ secrets.REFRESH_TOKEN }}" \
+          -d "grant_type=refresh_token")
+        
+        echo "OAuth response received"
+        ACCESS_TOKEN=$(echo "$RESPONSE" | jq -r '.access_token')
+        
+        if [[ "$ACCESS_TOKEN" == "null" || -z "$ACCESS_TOKEN" ]]; then
+          echo "❌ Failed to generate access token"
+          echo "Response: $RESPONSE"
+          exit 1
+        fi
+        
+        echo "✅ Access token generated successfully"
         echo "ACCESS_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
     
     - name: Run match posting script
       env:
         BLOG_ID: ${{ secrets.BLOG_ID }}
-        API_KEY: ${{ secrets.BLOGGER_API_KEY }}
+        API_KEY: ${{ secrets.API_KEY }}
         ACCESS_TOKEN: ${{ env.ACCESS_TOKEN }}
       run: node match-bot.js
     
