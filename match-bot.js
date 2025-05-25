@@ -267,6 +267,7 @@ async function storeUrlMapping(match, actualUrl, publishedDate) {
 function cleanIframeContent(iframeData) {
   if (!iframeData) return null;
   
+  // Create clean iframe HTML without telegram circle and other unwanted elements
   return `
     <div class="albaplayer_server-body">
       <div class="video-con embed-responsive">
@@ -302,7 +303,36 @@ function cleanIframeContent(iframeData) {
           </div>
         </div>
       </div>
-    </div>`;
+    </div>
+    <style>
+      /* Hide telegram circle and any popup messages */
+      #tme, 
+      #tme_message,
+      .telegram-popup,
+      .telegram-widget,
+      [id*="telegram"],
+      [class*="telegram"],
+      .subscription-popup,
+      .social-popup {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }
+      
+      /* Ensure clean player interface */
+      .albaplayer_server-body {
+        position: relative !important;
+        overflow: hidden !important;
+      }
+      
+      /* Remove any floating elements */
+      div[style*="position: fixed"],
+      div[style*="position: absolute"][style*="bottom"],
+      div[style*="position: absolute"][style*="right"] {
+        display: none !important;
+      }
+    </style>`;
 }
 
 async function createPost(match) {
