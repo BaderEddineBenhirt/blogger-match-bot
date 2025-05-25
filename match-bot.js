@@ -223,13 +223,13 @@ async function checkPostExists(title) {
   }
 }
 
-// ADDED: Function to create match key (same as browser will use)
 function createMatchKey(homeTeam, awayTeam, date) {
-  const combined = `${homeTeam}_${awayTeam}_${date}`.toLowerCase();
-  return combined.replace(/\s+/g, '_').replace(/[^\w_]/g, '');
+  const combined = `${homeTeam}_vs_${awayTeam}_${date}`;
+  return Buffer.from(combined, 'utf8').toString('base64')
+    .replace(/[^A-Za-z0-9]/g, '') 
+    .substring(0, 32);
 }
 
-// ADDED: Function to store URL mapping
 async function storeUrlMapping(match, actualUrl, publishedDate) {
   const path = './match-urls.json';
   
@@ -244,6 +244,8 @@ async function storeUrlMapping(match, actualUrl, publishedDate) {
     
     const matchKey = createMatchKey(match.homeTeam, match.awayTeam, match.date);
     
+    const readableKey = `${match.homeTeam} vs ${match.awayTeam} (${match.date})`;
+    
     mappings[matchKey] = {
       url: actualUrl,
       homeTeam: match.homeTeam,
@@ -251,11 +253,12 @@ async function storeUrlMapping(match, actualUrl, publishedDate) {
       league: match.league,
       date: match.date,
       published: publishedDate,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: new Date().toISOString(),
+      readableKey: readableKey 
     };
     
     await fs.writeFile(path, JSON.stringify(mappings, null, 2));
-    console.log(`📝 URL mapping stored: ${matchKey} -> ${actualUrl}`);
+    console.log(`📝 URL mapping stored: ${readableKey} -> ${actualUrl}`);
   } catch (error) {
     console.error('Error storing URL mapping:', error);
   }
@@ -341,7 +344,6 @@ async function createPost(match) {
     
     const response = await makeAuthenticatedRequest(url, postData, 'POST');
     
-    // ADDED: Store the URL mapping after successful post creation
     await storeUrlMapping(match, response.data.url, response.data.published);
     
     console.log(`✅ Post created: ${response.data.url}`);
@@ -356,7 +358,7 @@ async function createPost(match) {
         
         try {
           const retryResponse = await makeAuthenticatedRequest(url, postData, 'POST');
-          // ADDED: Store URL mapping for retry as well
+          // Store URL mapping for retry as well
           await storeUrlMapping(match, retryResponse.data.url, retryResponse.data.published);
           console.log(`✅ Post created after retry: ${retryResponse.data.url}`);
           return retryResponse.data;
