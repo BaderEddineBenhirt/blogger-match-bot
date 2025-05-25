@@ -25,7 +25,7 @@ async function makeAuthenticatedRequest(url, data, method = 'GET') {
 
 function isMatchCurrentOrFuture(timeString) {
   if (!timeString || timeString === 'TBD' || timeString === 'انتهت') {
-    return false; 
+    return false;
   }
   
   try {
@@ -209,7 +209,7 @@ async function extractIframeFromMatch(matchUrl) {
     
     const corsProxy = 'https://api.allorigins.win/raw?url=';
     const response = await axios.get(corsProxy + encodeURIComponent(matchUrl), {
-      timeout: 15000,
+      timeout: 20000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       }
@@ -220,15 +220,20 @@ async function extractIframeFromMatch(matchUrl) {
     let iframe = null;
     
     const iframeSelectors = [
-      'p iframe[allowfullscreen][height="500px"]',
-      'iframe[allowfullscreen][height="500px"]',
-      'iframe[src*="alkoora.live"]',
-      'iframe[src*="albaplayer"]',
       '.entry-content iframe',
       '.entry iframe',
       '#the-post iframe',
       'article iframe',
+      '.post-content iframe',
+      
+      'iframe[src*="alkoora.live"]',
+      'iframe[src*="albaplayer"]',
+      'iframe[src*="ddd.alkoora.live"]',
+      
+      'p iframe[allowfullscreen]',
+      'iframe[allowfullscreen][height="500px"]',
       'iframe[allowfullscreen]',
+      
       'iframe'
     ];
     
@@ -239,11 +244,13 @@ async function extractIframeFromMatch(matchUrl) {
         const src = $(element).attr('src');
         
         if (src && 
-            !src.includes('ads') && 
-            !src.includes('advertisement') && 
-            !src.includes('banner') &&
             !src.includes('aqle3.com') &&
             !src.includes('bvtpk.com') &&
+            !src.includes('btag.min.js') &&
+            !src.includes('tag.min.js') &&
+            !src.includes('googletagmanager') &&
+            !src.includes('advertisement') &&
+            !src.includes('banner') &&
             src.length > 10) {
           
           iframe = {
@@ -270,14 +277,36 @@ async function extractIframeFromMatch(matchUrl) {
       console.log(`❌ No suitable iframe found. Total iframes on page: ${allIframes.length}`);
       
       if (allIframes.length > 0) {
-        console.log('Available iframes:');
+        console.log('All iframes found:');
         allIframes.each((index, element) => {
           const src = $(element).attr('src');
           const width = $(element).attr('width');
           const height = $(element).attr('height');
+          const allowfullscreen = $(element).attr('allowfullscreen');
           console.log(`  ${index + 1}. src: ${src}`);
-          console.log(`     width: ${width}, height: ${height}`);
+          console.log(`     width: ${width}, height: ${height}, allowfullscreen: ${allowfullscreen}`);
+          console.log(`     HTML: ${$(element).toString().substring(0, 200)}...`);
         });
+        
+        const fallbackIframe = allIframes.first();
+        const fallbackSrc = fallbackIframe.attr('src');
+        
+        if (fallbackSrc && 
+            !fallbackSrc.includes('aqle3.com') && 
+            !fallbackSrc.includes('bvtpk.com') &&
+            !fallbackSrc.includes('googletagmanager')) {
+          
+          iframe = {
+            src: fallbackSrc.startsWith('//') ? `https:${fallbackSrc}` : fallbackSrc,
+            width: fallbackIframe.attr('width') || '100%',
+            height: fallbackIframe.attr('height') || '500px',
+            allowfullscreen: fallbackIframe.attr('allowfullscreen') || 'true',
+            frameborder: fallbackIframe.attr('frameborder') || '0',
+            scrolling: fallbackIframe.attr('scrolling') || '1'
+          };
+          
+          console.log(`🔄 Using fallback iframe: ${iframe.src}`);
+        }
       }
       
       const videoElements = $('video, embed, object');
@@ -474,6 +503,10 @@ async function createPost(match, isCurrentOrFuture = true) {
             width: 60px !important;
             height: 60px !important;
           }
+        }
+        /* Hide any potential external links */
+        .external-link, .original-link {
+          display: none !important;
         }
       </style>
       
