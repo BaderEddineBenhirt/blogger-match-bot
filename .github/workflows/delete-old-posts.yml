@@ -1,0 +1,79 @@
+name: Delete Old Match Posts
+on:
+  schedule:
+    - cron: '30 */6 * * *'
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Post Matches to Blogger"]
+    types:
+      - completed
+
+jobs:
+  delete-old-posts:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install dependencies
+      run: |
+        npm install axios cheerio
+    
+    - name: Install jq
+      run: sudo apt-get install jq
+    
+    - name: Generate Blogger Access Token
+      run: |
+        RESPONSE=$(curl -s -X POST https://oauth2.googleapis.com/token \
+          -H "Content-Type: application/x-www-form-urlencoded" \
+          -d "client_id=${{ secrets.CLIENT_ID }}" \
+          -d "client_secret=${{ secrets.CLIENT_SECRET }}" \
+          -d "refresh_token=${{ secrets.REFRESH_TOKEN }}" \
+          -d "grant_type=refresh_token")
+        
+        echo "OAuth response received"
+        ACCESS_TOKEN=$(echo "$RESPONSE" | jq -r '.access_token')
+        
+        if [[ "$ACCESS_TOKEN" == "null" || -z "$ACCESS_TOKEN" ]]; then
+          echo "Failed to generate access token"
+          echo "Response: $RESPONSE"
+          exit 1
+        fi
+        
+        echo "Access token generated successfully"
+        echo "ACCESS_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
+    
+    - name: Run deletion script
+      env:
+        BLOG_ID: ${{ secrets.BLOG_ID }}
+        API_KEY: ${{ secrets.API_KEY }}
+        ACCESS_TOKEN: ${{ env.ACCESS_TOKEN }}
+      run: node delete-old-posts.js
+    
+    - name: Commit and push updated mappings
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        if [ -f "match-urls.json" ] && [ -s "match-urls.json" ]; then
+          git add match-urls.json
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update match URL mappings after deletion - $(date '+%Y-%m-%d %H:%M:%S')"
+            git push
+            echo "URL mappings committed and pushed"
+          fi
+        else
+          echo "No match-urls.json file to update"
+        fi
+      continue-on-error: true
