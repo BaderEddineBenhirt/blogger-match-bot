@@ -34,11 +34,9 @@ function isMatchCurrentOrFuture(timeString) {
     
     console.log(`🕐 Current time: ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')} (${currentTime} minutes)`);
     
-    // Handle both "06:00 PM" and "18:00" formats
     let matchHour, matchMinute;
     
     if (timeString.includes('PM') || timeString.includes('AM')) {
-      // 12-hour format: "06:00 PM"
       const timeParts = timeString.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
       if (!timeParts) {
         console.log(`❌ Could not parse time format: ${timeString}`);
@@ -49,14 +47,12 @@ function isMatchCurrentOrFuture(timeString) {
       matchMinute = parseInt(timeParts[2]);
       const period = timeParts[3].toUpperCase();
       
-      // Convert to 24-hour format
       if (period === 'PM' && matchHour !== 12) {
         matchHour += 12;
       } else if (period === 'AM' && matchHour === 12) {
         matchHour = 0;
       }
     } else {
-      // 24-hour format: "18:00"
       const timeParts = timeString.match(/(\d{1,2}):(\d{2})/);
       if (!timeParts) {
         console.log(`❌ Could not parse time format: ${timeString}`);
@@ -72,7 +68,6 @@ function isMatchCurrentOrFuture(timeString) {
     console.log(`⚽ Match "${timeString}" → ${matchHour}:${matchMinute.toString().padStart(2, '0')} (${matchTime} minutes)`);
     console.log(`📊 Comparison: Match time ${matchTime} vs Current time ${currentTime}`);
     
-    // Allow matches that start within the next 30 minutes or are in the future
     const isCurrentOrFuture = matchTime >= (currentTime - 30);
     
     console.log(`✅ Result: ${isCurrentOrFuture ? 'FUTURE/CURRENT' : 'PAST'} (threshold: ${currentTime - 30})`);
@@ -115,7 +110,12 @@ async function fetchMatches(day = 'today') {
     console.log(`Fetching matches for ${day} from ${url}`);
     
     const corsProxy = 'https://api.allorigins.win/raw?url=';
-    const response = await axios.get(corsProxy + encodeURIComponent(url));
+    const response = await axios.get(corsProxy + encodeURIComponent(url), {
+      timeout: 15000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
     const html = response.data;
     
     const $ = cheerio.load(html);
@@ -140,12 +140,12 @@ async function fetchMatches(day = 'today') {
         const league = $(element).find('.MT_Info li:last-child span').text().trim();
         const broadcaster = $(element).find('.MT_Info li:first-child span').text().trim();
         
-        const matchLinkElement = $(element).find('a');
+        const matchLinkElement = $(element).find('a[href]').first();
         let matchLink = null;
         
         if (matchLinkElement.length > 0) {
           let href = matchLinkElement.attr('href');
-          if (href) {
+          if (href && href !== '#' && href !== '/') {
             if (href.startsWith('http')) {
               matchLink = href;
             } else if (href.startsWith('/')) {
@@ -154,6 +154,16 @@ async function fetchMatches(day = 'today') {
               matchLink = `https://www.kooraliive.com/${href}`;
             }
             console.log(`Found match link: ${matchLink}`);
+          } else {
+            const altLink = $(element).find('[onclick*="window.open"], [onclick*="location.href"]').first();
+            if (altLink.length > 0) {
+              const onclick = altLink.attr('onclick');
+              const urlMatch = onclick.match(/(?:window\.open|location\.href\s*=)\s*['"](.*?)['"]/);
+              if (urlMatch && urlMatch[1]) {
+                matchLink = urlMatch[1].startsWith('http') ? urlMatch[1] : `https://www.kooraliive.com${urlMatch[1]}`;
+                console.log(`Found alternative match link: ${matchLink}`);
+              }
+            }
           }
         }
         
@@ -191,8 +201,8 @@ async function fetchMatches(day = 'today') {
 
 async function extractIframeFromMatch(matchUrl) {
   try {
-    if (!matchUrl) {
-      console.log('No match URL provided');
+    if (!matchUrl || matchUrl === 'https://www.kooraliive.com/' || matchUrl === 'https://www.kooraliive.com') {
+      console.log('❌ Invalid or generic match URL provided, skipping iframe extraction');
       return null;
     }
     
@@ -318,7 +328,7 @@ async function checkPostExists(title) {
     
     if (response.data.items && response.data.items.length > 0) {
       console.log(`Post with similar title already exists: ${title}`);
-      return true;
+      return response.data.items[0]; 
     }
     
     return false;
@@ -440,44 +450,36 @@ async function createPost(match) {
   try {
     const title = `${match.homeTeam} vs ${match.awayTeam} - ${match.league}`;
     
-    const exists = await checkPostExists(title);
-    if (exists) {
+    const existingPost = await checkPostExists(title);
+    if (existingPost) {
       console.log(`Post already exists: ${title}`);
       
       if (match.date === 'today' && isMatchCurrentOrFuture(match.time)) {
-        try {
-          const searchUrl = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/search?q=${encodeURIComponent(title)}&key=${API_KEY}`;
-          const response = await axios.get(searchUrl);
-          
-          if (response.data.items && response.data.items.length > 0) {
-            const existingPost = response.data.items[0];
-            
-            const postDate = existingPost.published.split('T')[0];
-            const today = new Date().toISOString().split('T')[0];
-            
-            if (postDate === today) {
-              await storeUrlMapping(match, existingPost.url, existingPost.published);
-              console.log(`📝 Registered existing current/future post: ${title}`);
-              return { existing: true, title: title };
-            } else {
-              console.log(`⏰ Existing post is from ${postDate}, not today (${today}) - skipping registration`);
-              return { existing: false, reason: 'old_date' };
-            }
-          }
-        } catch (error) {
-          console.error('Error registering existing post:', error);
+        const postDate = existingPost.published.split('T')[0];
+        const today = new Date().toISOString().split('T')[0];
+        
+        if (postDate === today) {
+          await storeUrlMapping(match, existingPost.url, existingPost.published);
+          console.log(`📝 Registered existing current/future post: ${title}`);
+          return { existing: true, title: title };
+        } else {
+          console.log(`⏰ Existing post is from ${postDate}, not today (${today}) - skipping registration`);
+          return { existing: false, reason: 'old_date' };
         }
       } else {
         console.log(`⏰ Existing post is not current/future today - skipping registration`);
         return { existing: false, reason: 'not_current_future' };
       }
-      
-      return { existing: false, reason: 'not_tracked' };
     }
     
     console.log(`Creating post for: ${title}`);
     
-    const iframeData = await extractIframeFromMatch(match.matchLink);
+    let iframeData = null;
+    if (match.matchLink && match.matchLink !== 'https://www.kooraliive.com/' && match.matchLink !== 'https://www.kooraliive.com') {
+      iframeData = await extractIframeFromMatch(match.matchLink);
+    } else {
+      console.log('⚠️ No valid match link available, skipping iframe extraction');
+    }
     
     let playerSection;
     if (iframeData) {
@@ -590,26 +592,8 @@ async function createPost(match) {
       const errorMessage = error.response?.data?.error?.message || 'Rate limit exceeded';
       if (errorMessage.includes('limit') || errorMessage.includes('timeframe')) {
         console.log(`⏸️  Rate limit hit for: ${match.homeTeam} vs ${match.awayTeam}`);
-        console.log(`⏳ Waiting 5 minutes before retrying...`);
-        await new Promise(resolve => setTimeout(resolve, 300000));
-        
-        try {
-          const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/`;
-          const postData = {
-            kind: 'blogger#post',
-            blog: { id: BLOG_ID },
-            title: `${match.homeTeam} vs ${match.awayTeam} - ${match.league}`,
-            content: content
-          };
-          
-          const retryResponse = await makeAuthenticatedRequest(url, postData, 'POST');
-          await storeUrlMapping(match, retryResponse.data.url, retryResponse.data.published);
-          console.log(`✅ Post created after retry: ${retryResponse.data.url}`);
-          return retryResponse.data;
-        } catch (retryError) {
-          console.log(`❌ Still rate limited after 5 minutes, skipping: ${match.homeTeam} vs ${match.awayTeam}`);
-          return { skipped: true, reason: 'rate_limit' };
-        }
+        console.log(`⏳ Skipping this match to avoid extended delays...`);
+        return { skipped: true, reason: 'rate_limit' };
       }
     }
     
@@ -618,9 +602,156 @@ async function createPost(match) {
   }
 }
 
+async function deleteFinishedMatchPosts() {
+  try {
+    console.log('\n🧹 Starting cleanup of finished match posts...');
+    
+    const path = './match-urls.json';
+    let mappings = {};
+    
+    try {
+      const data = await fs.readFile(path, 'utf8');
+      mappings = JSON.parse(data);
+    } catch (e) {
+      console.log('📂 No URL mappings file found, skipping cleanup');
+      return { deleted: 0, skipped: 0 };
+    }
+    
+    let deletedCount = 0;
+    let skippedCount = 0;
+    let errorCount = 0;
+    
+    const mappingEntries = Object.entries(mappings);
+    console.log(`📋 Found ${mappingEntries.length} tracked posts to check`);
+    
+    for (const [matchKey, mapping] of mappingEntries) {
+      try {
+        console.log(`\n🔍 Checking: ${mapping.readableKey}`);
+        
+        const publishedTime = new Date(mapping.published);
+        const now = new Date();
+        const hoursAgo = (now - publishedTime) / (1000 * 60 * 60);
+        
+        if (hoursAgo < 3) {
+          console.log(`⏰ Post is only ${hoursAgo.toFixed(1)} hours old, skipping cleanup`);
+          skippedCount++;
+          continue;
+        }
+        
+        if (!mapping.url || !mapping.url.includes('blogger')) {
+          console.log(`❓ Invalid URL format, skipping: ${mapping.url}`);
+          skippedCount++;
+          continue;
+        }
+        
+        const postIdMatch = mapping.url.match(/\/(\d+)\.html/);
+        if (!postIdMatch) {
+          console.log(`❓ Could not extract post ID from URL: ${mapping.url}`);
+          skippedCount++;
+          continue;
+        }
+        
+        const postId = postIdMatch[1];
+        
+        const getUrl = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/${postId}?key=${API_KEY}`;
+        
+        try {
+          const response = await axios.get(getUrl);
+          const post = response.data;
+          
+          const postDate = new Date(post.published).toDateString();
+          const today = new Date().toDateString();
+          const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toDateString();
+          
+          if (postDate === today) {
+            console.log(`📅 Post is from today, checking if match is finished...`);
+            
+            const currentHour = new Date().getHours();
+            const currentMinute = new Date().getMinutes();
+            const currentTime = currentHour * 60 + currentMinute;
+            
+            let shouldDelete = false;
+            
+            if (mapping.homeTeam && mapping.awayTeam) {
+              const todayMatches = await fetchMatches('today');
+              const relatedMatch = todayMatches.find(m => 
+                m.homeTeam === mapping.homeTeam && m.awayTeam === mapping.awayTeam
+              );
+              
+              if (relatedMatch && !isMatchCurrentOrFuture(relatedMatch.time)) {
+                console.log(`⚽ Match ${mapping.homeTeam} vs ${mapping.awayTeam} has finished`);
+                shouldDelete = true;
+              } else if (relatedMatch) {
+                console.log(`⚽ Match ${mapping.homeTeam} vs ${mapping.awayTeam} is still current/future`);
+                skippedCount++;
+                continue;
+              }
+            }
+            
+            if (!shouldDelete && hoursAgo > 6) {
+              console.log(`⏰ Post is more than 6 hours old, assuming match is finished`);
+              shouldDelete = true;
+            }
+            
+            if (!shouldDelete) {
+              console.log(`✅ Match is still current/future, keeping post`);
+              skippedCount++;
+              continue;
+            }
+          } else if (postDate === yesterday) {
+            console.log(`📅 Post is from yesterday, will delete`);
+          } else if (new Date(post.published) < new Date(Date.now() - 48 * 60 * 60 * 1000)) {
+            console.log(`📅 Post is older than 2 days, will delete`);
+          } else {
+            console.log(`📅 Post is recent but not old enough, skipping`);
+            skippedCount++;
+            continue;
+          }
+          
+          const deleteUrl = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/${postId}`;
+          await makeAuthenticatedRequest(deleteUrl, null, 'DELETE');
+          
+          console.log(`🗑️  Deleted post: ${post.title}`);
+          deletedCount++;
+          
+          delete mappings[matchKey];
+          
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+        } catch (getError) {
+          if (getError.response?.status === 404) {
+            console.log(`❌ Post not found (already deleted?), removing from mappings`);
+            delete mappings[matchKey];
+          } else {
+            console.error(`❌ Error checking/deleting post ${postId}:`, getError.response?.data || getError.message);
+            errorCount++;
+          }
+        }
+        
+      } catch (error) {
+        console.error(`❌ Error processing mapping ${matchKey}:`, error.message);
+        errorCount++;
+      }
+    }
+    
+    await fs.writeFile(path, JSON.stringify(mappings, null, 2));
+    
+    console.log(`\n🧹 Cleanup Complete!`);
+    console.log(`   🗑️  Deleted ${deletedCount} finished match posts`);
+    console.log(`   ⏭️  Skipped ${skippedCount} current/recent posts`);
+    console.log(`   ❌ Errors: ${errorCount}`);
+    
+    return { deleted: deletedCount, skipped: skippedCount, errors: errorCount };
+    
+  } catch (error) {
+    console.error('❌ Error in deleteFinishedMatchPosts:', error);
+    return { deleted: 0, skipped: 0, errors: 1 };
+  }
+}
+
 async function createMatchPosts() {
   try {
-    console.log('🚀 Starting to create match posts with filtering...');
+    console.log('🚀 Starting match posts management...');
     
     if (!BLOG_ID || !API_KEY || !ACCESS_TOKEN) {
       console.error('❌ Missing required environment variables');
@@ -630,6 +761,8 @@ async function createMatchPosts() {
     
     console.log('✅ All required environment variables found');
     console.log(`📝 Blog ID: ${BLOG_ID}`);
+    
+    const cleanupResults = await deleteFinishedMatchPosts();
     
     const todayMatches = await fetchMatches('today');
     
@@ -649,28 +782,33 @@ async function createMatchPosts() {
     let existingCount = 0;
     
     console.log('\n⚽ Processing today\'s current and future matches...');
-    for (const match of filteredTodayMatches) {
-      console.log(`\n⚽ Processing: ${match.homeTeam} vs ${match.awayTeam} at ${match.time}`);
+    for (let i = 0; i < filteredTodayMatches.length; i++) {
+      const match = filteredTodayMatches[i];
+      console.log(`\n⚽ Processing (${i + 1}/${filteredTodayMatches.length}): ${match.homeTeam} vs ${match.awayTeam} at ${match.time}`);
+      
       const post = await createPost(match);
       
       if (post && post.skipped) {
         skippedCount++;
+        console.log(`⏭️  Skipped due to rate limit, continuing with next match...`);
       } else if (post && post.existing) {
         existingCount++;
       } else if (post) {
         createdCount++;
+        
+        if (i < filteredTodayMatches.length - 1) { 
+          console.log('⏳ Waiting 45 seconds to respect Blogger rate limits...');
+          await new Promise(resolve => setTimeout(resolve, 45000));
+        }
       }
       
-      if (createdCount > 0) {
-        console.log('⏳ Waiting 30 seconds to respect Blogger rate limits...');
-        await new Promise(resolve => setTimeout(resolve, 30000));
-      } else {
-        console.log('⏳ Waiting 5 seconds before next attempt...');
-        await new Promise(resolve => setTimeout(resolve, 5000));
+      if (i < filteredTodayMatches.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
       }
     }
     
     console.log(`\n🎉 Processing Complete!`);
+    console.log(`   🧹 Cleanup: ${cleanupResults.deleted} deleted, ${cleanupResults.skipped} kept`);
     console.log(`   ✅ Created ${createdCount} new match posts`);
     console.log(`   📋 Registered ${existingCount} existing posts`);
     console.log(`   ⏸️  Skipped ${skippedCount} due to rate limits`);
