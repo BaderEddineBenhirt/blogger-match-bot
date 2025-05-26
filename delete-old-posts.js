@@ -198,7 +198,7 @@ async function deleteOldMatchPosts() {
     console.log('All required environment variables found');
     console.log(`Blog ID: ${BLOG_ID}`);
     
-    const urlMappings = await loadUrlMappings();
+    let urlMappings = await loadUrlMappings();
     let allPosts = await getAllBlogPosts();
     
     if (allPosts.length === 0) {
@@ -213,6 +213,7 @@ async function deleteOldMatchPosts() {
     let skippedCount = 0;
     let errorCount = 0;
     const deletedMappings = [];
+    const updatedMappings = { ...urlMappings };
     
     for (const post of matchPosts) {
       console.log(`\nProcessing: ${post.title}`);
@@ -257,13 +258,14 @@ async function deleteOldMatchPosts() {
         if (success) {
           deletedCount++;
           
-          const mappingKey = Object.keys(urlMappings).find(key => 
-            urlMappings[key].url === post.url
+          const mappingKey = Object.keys(updatedMappings).find(key => 
+            updatedMappings[key].url === post.url
           );
           
           if (mappingKey) {
             deletedMappings.push(mappingKey);
-            console.log(`Marked mapping for deletion: ${urlMappings[mappingKey].readableKey}`);
+            console.log(`Removing mapping: ${updatedMappings[mappingKey].readableKey}`);
+            delete updatedMappings[mappingKey];
           }
         } else {
           errorCount++;
@@ -276,12 +278,9 @@ async function deleteOldMatchPosts() {
       }
     }
     
-    deletedMappings.forEach(key => {
-      delete urlMappings[key];
-    });
-    
     if (deletedMappings.length > 0) {
-      await saveUrlMappings(urlMappings);
+      console.log(`Saving updated mappings (removed ${deletedMappings.length} entries)`);
+      await saveUrlMappings(updatedMappings);
     }
     
     console.log(`\nDeletion Complete!`);
