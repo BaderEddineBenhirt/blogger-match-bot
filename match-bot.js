@@ -32,52 +32,21 @@ function isMatchCurrentOrFuture(timeString) {
     const now = new Date();
     const currentTime = now.getHours() * 60 + now.getMinutes();
     
-    console.log(`🕐 Current time: ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')} (${currentTime} minutes)`);
+    const timeParts = timeString.match(/(\d{1,2}):(\d{2})/);
+    if (!timeParts) return false;
     
-    // Handle both "06:00 PM" and "18:00" formats
-    let matchHour, matchMinute;
+    let matchHour = parseInt(timeParts[1]);
+    let matchMinute = parseInt(timeParts[2]);
     
-    if (timeString.includes('PM') || timeString.includes('AM')) {
-      // 12-hour format: "06:00 PM"
-      const timeParts = timeString.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-      if (!timeParts) {
-        console.log(`❌ Could not parse time format: ${timeString}`);
-        return false;
-      }
-      
-      matchHour = parseInt(timeParts[1]);
-      matchMinute = parseInt(timeParts[2]);
-      const period = timeParts[3].toUpperCase();
-      
-      // Convert to 24-hour format
-      if (period === 'PM' && matchHour !== 12) {
-        matchHour += 12;
-      } else if (period === 'AM' && matchHour === 12) {
-        matchHour = 0;
-      }
-    } else {
-      // 24-hour format: "18:00"
-      const timeParts = timeString.match(/(\d{1,2}):(\d{2})/);
-      if (!timeParts) {
-        console.log(`❌ Could not parse time format: ${timeString}`);
-        return false;
-      }
-      
-      matchHour = parseInt(timeParts[1]);
-      matchMinute = parseInt(timeParts[2]);
+    if (timeString.toLowerCase().includes('pm') && matchHour !== 12) {
+      matchHour += 12;
+    } else if (timeString.toLowerCase().includes('am') && matchHour === 12) {
+      matchHour = 0;
     }
     
     const matchTime = matchHour * 60 + matchMinute;
     
-    console.log(`⚽ Match "${timeString}" → ${matchHour}:${matchMinute.toString().padStart(2, '0')} (${matchTime} minutes)`);
-    console.log(`📊 Comparison: Match time ${matchTime} vs Current time ${currentTime}`);
-    
-    // Allow matches that start within the next 30 minutes or are in the future
-    const isCurrentOrFuture = matchTime >= (currentTime - 30);
-    
-    console.log(`✅ Result: ${isCurrentOrFuture ? 'FUTURE/CURRENT' : 'PAST'} (threshold: ${currentTime - 30})`);
-    
-    return isCurrentOrFuture;
+    return matchTime >= (currentTime - 30);
   } catch (error) {
     console.error('Error parsing match time:', error);
     return false;
